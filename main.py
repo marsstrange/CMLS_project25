@@ -6,7 +6,7 @@ from PyQt5.QtCore import Qt
 class TabletWidget(QWidget):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("GAOMON Tablet Drawing with Pressure")
+        self.setWindowTitle("GAOMONgit push -u origin main Tablet Drawing with Pressure")
         self.setGeometry(100, 100, 800, 600)
 
         self.canvas = QPixmap(self.size())
