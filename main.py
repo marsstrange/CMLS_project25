@@ -1,3 +1,6 @@
+import os
+
+os.environ['QT_LOGGING_RULES'] = '*.debug=false'  # Disable Qt debug messages
 import sys
 import numpy as np
 import cv2
@@ -115,8 +118,8 @@ class MainWindow(QMainWindow):
 class TabletWidget(QWidget):
     shape_detected = pyqtSignal(object)
 
-    def __init__(self):
-        super().__init__()
+    def __init__(self, parent=None):
+        super().__init__(parent)
         self.setWindowTitle("Tablet Drawing with Sound Output")
         self.setGeometry(100, 100, 1000, 700)
 
@@ -127,6 +130,8 @@ class TabletWidget(QWidget):
         self.pen_color = QColor(0, 0, 0)
         self.using_mouse = False
         self.last_pressure = 0.5
+        self.holding_button = False  # Initialize the holding state
+        self.held_shapes = []  # Initialize the list for held shapes
 
         # Preview canvas
         self.preview_canvas = QPixmap(self.canvas.size())
@@ -173,20 +178,33 @@ class TabletWidget(QWidget):
         self.info_label.setText(text)
 
     def send_shape_to_sc(self, shape):
-        """Send shape data to SuperCollider via OSC"""
-        osc_data = shape.to_osc_dict()
-        self.osc_client.send_message("/shape", [
-            shape.shape_category,  # String
-            shape.position.x() / self.width() if self.width() > 0 else 0,  # x (0-1)
-            1.0 - (shape.position.y() / self.height()) if self.height() > 0 else 0,  # y (0-1)
-            shape.size[0],  # width
-            shape.size[1],  # height
-            shape.color.red() / 255.0,  # r
-            shape.color.green() / 255.0,  # g
-            shape.color.blue() / 255.0,  # b
-            shape.pressure  # pressure (0-1)
-        ])
-        print(f"Sent to SuperCollider: {osc_data}")
+        try:
+            # Calculate total stroke length
+            total_length = 0
+            for i in range(len(self.current_stroke) - 1):
+                p1 = self.current_stroke[i]
+                p2 = self.current_stroke[i + 1]
+                total_length += ((p2.x() - p1.x()) ** 2 + (p2.y() - p1.y()) ** 2) ** 0.5
+
+            # Normalize position to 0-1 range
+            x_pos = shape.position.x() / self.width()
+            y_pos = shape.position.y() / self.height()
+
+            self.osc_client.send_message("/shape", [
+                str(shape.shape_category),  # category
+                float(x_pos),  # x position
+                float(y_pos),  # y position
+                float(shape.size[0]),  # width
+                float(shape.size[1]),  # height
+                float(shape.color.red() / 255.0),  # r
+                float(shape.color.green() / 255.0),  # g
+                float(shape.color.blue() / 255.0),  # b
+                float(shape.pressure),  # pressure
+                float(total_length)  # total stroke length
+            ])
+            print(f"Sent shape: {shape.shape_category}, pos: ({x_pos:.2f}, {y_pos:.2f}), length: {total_length:.2f}")
+        except Exception as e:
+            print(f"Error sending OSC message: {str(e)}")
 
     def save_undo(self):
         self.undo_stack.append(self.canvas.copy())
@@ -195,17 +213,42 @@ class TabletWidget(QWidget):
     def tabletEvent(self, event: QTabletEvent):
         self.using_mouse = False
         pos = event.pos()
-        pressure = event.pressure()
-        self.last_pressure = pressure
+        pressure = max(0.0, min(1.0, event.pressure()))
+
+        # Store pressure with position for averaging later
+        if not hasattr(self, 'stroke_pressures'):
+            self.stroke_pressures = []
+        self.stroke_pressures.append(pressure)
+
         rgb = (self.pen_color.red(), self.pen_color.green(), self.pen_color.blue())
         self.update_info(f"🖊️ Tablet - Pos: ({pos.x()}, {pos.y()}), Pressure: {pressure:.3f}, RGB{rgb}")
 
         if event.type() == QTabletEvent.TabletPress:
             self.last_pos = pos
+            self.current_stroke = [pos]
+            self.stroke_pressures = [pressure]  # Reset pressures for new stroke
         elif event.type() == QTabletEvent.TabletMove and self.last_pos is not None:
+            # Just draw the line without shape detection
             self.draw_line(self.last_pos, pos, pressure)
             self.last_pos = pos
+            self.current_stroke.append(pos)
         elif event.type() == QTabletEvent.TabletRelease:
+            if self.current_stroke:
+                self.strokes.append(self.current_stroke)
+                # Only do shape detection on release
+                shapes = self.detect_shapes(self.pixmap_to_cvimg(self.canvas))
+                if shapes:
+                    shape = shapes[0]
+                    # Calculate average pressure for the stroke
+                    avg_pressure = sum(self.stroke_pressures) / len(
+                        self.stroke_pressures) if self.stroke_pressures else 0.5
+                    shape.pressure = avg_pressure
+                    print(f"Average stroke pressure: {avg_pressure:.3f}")
+                    self.perfect_shapes.append(shape)
+                    self.shape_detected.emit(shape)
+                    self.send_shape_to_sc(shape)
+                self.current_stroke = []
+                self.stroke_pressures = []
             self.last_pos = None
             self.preview_canvas.fill(Qt.transparent)
             self.update()
@@ -216,18 +259,19 @@ class TabletWidget(QWidget):
         if event.button() == Qt.LeftButton:
             self.using_mouse = True
             self.last_pos = event.pos()
-        elif event.button() == Qt.RightButton:
-            self.color_dialog.show()
+            self.current_stroke = [self.last_pos]
+            self.last_pressure = 0.5  # Fixed pressure for mouse
 
     def mouseMoveEvent(self, event):
         if self.using_mouse and self.last_pos is not None:
-            pressure = 0.5
+            pressure = 0.5  # Fixed pressure for mouse
             pos = event.pos()
             rgb = (self.pen_color.red(), self.pen_color.green(), self.pen_color.blue())
             self.update_info(f"🖱️ Mouse - Pos: ({pos.x()}, {pos.y()}), Pressure: {pressure:.3f}, RGB{rgb}")
 
             self.draw_line(self.last_pos, pos, pressure)
             self.last_pos = pos
+            self.last_pressure = pressure
 
             # Real-time shape hint
             self.preview_canvas.fill(Qt.transparent)
@@ -320,7 +364,6 @@ class TabletWidget(QWidget):
             "↩️  Z - Undo\n"
             "↪️  Y - Redo\n"
             "❓ H - Show Help Dialog\n"
-            "🖱️  Right-Click - Color Picker\n"
         )
 
     def pixmap_to_cvimg(self, pixmap):
@@ -360,7 +403,17 @@ class TabletWidget(QWidget):
         elif len(approx) > 6:
             shape_category = "Circle"
 
-        return [Shape(shape_category, approx, self.pen_color, self.last_pressure)]
+        # Calculate normalized position
+        x, y, w, h = cv2.boundingRect(points)
+        center_x = x + w / 2
+        center_y = y + h / 2
+
+        # Create shape with proper position and pressure
+        shape = Shape(shape_category, approx, self.pen_color, self.last_pressure)
+        shape.position = QPoint(center_x, center_y)
+        shape.size = (w, h)
+
+        return [shape]
 
     def draw_detected_shapes(self, img, shapes, hint_only=False):
         for shape in shapes:
