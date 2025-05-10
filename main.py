@@ -405,8 +405,8 @@ class TabletWidget(QWidget):
 
         # Calculate normalized position
         x, y, w, h = cv2.boundingRect(points)
-        center_x = x + w / 2
-        center_y = y + h / 2
+        center_x = int(x + w / 2)  # Convert to integer
+        center_y = int(y + h / 2)  # Convert to integer
 
         # Create shape with proper position and pressure
         shape = Shape(shape_category, approx, self.pen_color, self.last_pressure)
