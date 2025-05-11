@@ -150,6 +150,7 @@ class TabletWidget(QWidget):
         # OSC setup
         self.osc_client = udp_client.SimpleUDPClient("127.0.0.1", 57120)  # Default SC port
         self.osc_address = "/shape"
+        self.stop_address = "/stopAll"  # Add stop address
 
         # UI elements
         self.info_label = QLabel(self)
@@ -351,7 +352,17 @@ class TabletWidget(QWidget):
         elif event.key() == Qt.Key_P:
             self.show_perfect_shapes = not self.show_perfect_shapes
             self.redraw_all_strokes()
+        elif event.key() == Qt.Key_Escape:  # Add Escape key handler
+            self.stop_all_sounds()
         event.accept()
+
+    def stop_all_sounds(self):
+        """Send OSC message to stop all sounds"""
+        try:
+            self.osc_client.send_message(self.stop_address, [])
+            self.update_info("🔇 All sounds stopped")
+        except Exception as e:
+            print(f"Error sending stop command: {str(e)}")
 
     def show_help(self):
         QMessageBox.information(
@@ -364,6 +375,7 @@ class TabletWidget(QWidget):
             "↩️  Z - Undo\n"
             "↪️  Y - Redo\n"
             "❓ H - Show Help Dialog\n"
+            "🔇 ESC - Stop All Sounds\n"  # Add stop command to help
         )
 
     def pixmap_to_cvimg(self, pixmap):
