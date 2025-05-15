@@ -6,12 +6,11 @@ import numpy as np
 import cv2
 from pythonosc import udp_client
 from PyQt5.QtWidgets import (QApplication, QWidget, QTabWidget, QVBoxLayout,
-                             QLabel, QColorDialog, QMessageBox, QMainWindow, QSizePolicy)
+                             QLabel, QColorDialog, QMessageBox, QMainWindow)
 from PyQt5.QtGui import (QPainter, QPen, QPixmap, QTabletEvent,
                          QColor, QImage)
-from PyQt5.QtCore import Qt, QPoint, pyqtSignal
+from PyQt5.QtCore import Qt, QPoint, pyqtSignal, QSize
 
-a = "try"
 class Shape:
     def __init__(self, shape_category, contour, color, pressure):
         self.shape_category = shape_category
@@ -57,52 +56,53 @@ class Shape:
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("Tablet Drawing App")
-        
-        # Create central widget and layout first
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        layout = QVBoxLayout(central_widget)
-        
-        # Create tablet widget
-        self.tablet_widget = TabletWidget()
-        layout.addWidget(self.tablet_widget)
-        
-        # Now we can set the window size based on the tablet widget
-        self.setMinimumSize(1280, 720)
-        self.resize(1280, 720)
-        
-        # Center the window
-        screen = QApplication.primaryScreen().geometry()
-        x = (screen.width() - 1280) // 2
-        y = (screen.height() - 720) // 2
-        self.move(x, y)
-        
-        # Create info label
-        self.info_label = QLabel()
-        self.info_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self.info_label)
-        
-        # Create color dialog
-        self.color_dialog = QColorDialog()
-        self.color_dialog.setOption(QColorDialog.NoButtons)
-        self.color_dialog.setOption(QColorDialog.DontUseNativeDialog)
-        self.color_dialog.setWindowFlags(Qt.WindowStaysOnTopHint)
-        self.color_dialog.setVisible(False)
-        
-        # Connect color dialog
-        self.color_dialog.currentColorChanged.connect(self.tablet_widget.set_pen_color)
+        self.setWindowTitle("Drawing App with Sound Output")
+        self.setMinimumSize(400, 300)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowMaximizeButtonHint)
+
+        # Create tab widget
+        self.tab_widget = QTabWidget()
+        self.setCentralWidget(self.tab_widget)
+
+        # Create drawing tab
+        self.drawing_tab = TabletWidget()
+        self.tab_widget.addTab(self.drawing_tab, "Drawing")
+
+        # Create results tab
+        self.results_tab = QWidget()
+        self.results_layout = QVBoxLayout()
+        self.results_layout.setContentsMargins(0, 0, 0, 0)
+        self.results_tab.setLayout(self.results_layout)
+        self.tab_widget.addTab(self.results_tab, "Results")
+
+        # Create canvas for results
+        self.results_canvas = QPixmap(self.drawing_tab.size())
+        self.results_canvas.fill(Qt.white)
+        self.results_label = QLabel()
+        self.results_label.setPixmap(self.results_canvas)
+        self.results_label.setScaledContents(True)
+        self.results_layout.addWidget(self.results_label)
+
+        # Connect signals
+        self.drawing_tab.shape_detected.connect(self.update_results)
 
     def resizeEvent(self, event):
-        new_size = self.tablet_widget.size()
-        self.tablet_widget.resize(new_size)
+        # Only constrain size if window is not maximized
+        if not self.isMaximized():
+            current_size = self.size()
+            new_size = QSize(
+                min(max(400, current_size.width()), 1920),
+                min(max(300, current_size.height()), 1080)
+            )
+            if current_size != new_size:
+                self.resize(new_size)
         super().resizeEvent(event)
 
     def update_results(self, shape_info):
-        self.tablet_widget.results_canvas.fill(Qt.white)
-        painter = QPainter(self.tablet_widget.results_canvas)
+        self.results_canvas.fill(Qt.white)
+        painter = QPainter(self.results_canvas)
 
-        for shape in self.tablet_widget.perfect_shapes:
+        for shape in self.drawing_tab.perfect_shapes:
             painter.setPen(QPen(shape.color, 2))
 
             if shape.shape_category == "Circle":
@@ -116,7 +116,7 @@ class MainWindow(QMainWindow):
                     if shape.shape_category != "Line":
                         painter.drawLine(points[-1], points[0])
 
-        self.tablet_widget.results_label.setPixmap(self.tablet_widget.results_canvas)
+        self.results_label.setPixmap(self.results_canvas)
 
 
 class Stroke:
@@ -142,11 +142,11 @@ class TabletWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Tablet Drawing with Sound Output")
-        self.setMinimumSize(1280, 720)  # Match window size
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-        
-        # Initialize canvas with matching size
-        self.canvas = QPixmap(1280, 720)  # Match window size
+        self.setGeometry(100, 100, 1000, 700)
+        self.setMinimumSize(400, 300)
+        self.setMaximumSize(1920, 1080)
+        # Drawing setup
+        self.canvas = QPixmap(self.size())
         self.canvas.fill(Qt.white)
         self.last_pos = None
         self.pen_color = QColor(0, 0, 0)
@@ -180,7 +180,7 @@ class TabletWidget(QWidget):
 
         # UI elements
         self.info_label = QLabel(self)
-        self.info_label.setStyleSheet("background-color: white; padding: 4px;")
+        self.info_label.setStyleSheet("background-color: white; padding: 20px;")
         self.info_label.move(10, self.height() - 30)
         self.info_label.resize(self.width() - 20, 20)
 
@@ -243,12 +243,8 @@ class TabletWidget(QWidget):
 
         if not hasattr(self, 'stroke_pressures'):
             self.stroke_pressures = []
-            self.pressure_points_count = 0
         self.stroke_pressures.append(pressure)
-        self.pressure_points_count += 1
-
-        if self.pressure_points_count > 20:
-            print(f"Pressure: {pressure:.3f}")
+        print(f"Pressure: {pressure:.3f}")  # Print all pressure points
 
         rgb = (self.pen_color.red(), self.pen_color.green(), self.pen_color.blue())
         self.update_info(f"🖊️ Tablet - Pos: ({pos.x()}, {pos.y()}), Pressure: {pressure:.3f}, RGB{rgb}")
@@ -257,7 +253,6 @@ class TabletWidget(QWidget):
             self.last_pos = pos
             self.current_stroke = [pos]
             self.stroke_pressures = [pressure]
-            self.pressure_points_count = 1
         elif event.type() == QTabletEvent.TabletMove and self.last_pos is not None:
             # Draw directly on canvas
             painter = QPainter(self.canvas)
@@ -286,7 +281,6 @@ class TabletWidget(QWidget):
                 
                 self.current_stroke = []
                 self.stroke_pressures = []
-                self.pressure_points_count = 0
             self.last_pos = None
             self.update()
 
@@ -359,10 +353,11 @@ class TabletWidget(QWidget):
         painter.end()
 
     def resizeEvent(self, event):
-        new_canvas = QPixmap(self.size())
+        new_canvas = QPixmap(event.size())
         new_canvas.fill(Qt.white)
         painter = QPainter(new_canvas)
         painter.drawPixmap(0, 0, self.canvas)
+        painter.end()
         self.canvas = new_canvas
 
         self.preview_canvas = QPixmap(self.canvas.size())
