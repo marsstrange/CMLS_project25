@@ -1,8 +1,16 @@
-// Boot the server first
+// Boot the server
 s.boot;
 
+//VSTPlugin.search;
+
+// Does the effects routing
+SynthDef(\juce_effects, { |in, out|
+    var sound = In.ar(in, 2);
+    ReplaceOut.ar(out, VSTPlugin.ar(sound, 2, id: \juce_effects));
+}).add;
+
 // SynthDef with all waveform options
-SynthDef(\shapeSound, { |freq=440, amp=0.1, dur=0.5, pan=0, waveType=0, total_length=1|
+SynthDef(\shapeSound, { |freq=440, amp=0.1, dur=0.5, pan=0, waveType=0, total_length=1, out=0|
     var env = Env.perc(0.01, dur * total_length.clip(0.1, 2)).kr(2); // Scale duration by total_length
     var sig;
 
@@ -20,8 +28,24 @@ SynthDef(\shapeSound, { |freq=440, amp=0.1, dur=0.5, pan=0, waveType=0, total_le
 
     sig = sig * env * amp;
     sig = Pan2.ar(sig, pan);
-    Out.ar(0, sig);
+    Out.ar(out, sig);
 }).add;
+
+~effectsBus = Bus.audio(s, 2);
+
+~juce_effects = VSTPluginController(Synth(\juce_effects, [\in, ~effectsBus, \out, 0]), id: \juce_effects);
+~juce_effects.open("C:/Program Files/Common Files/VST3/Valhalla/ValhallaShimmer.vst3", editor: true, verbose: true);
+~juce_effects.editor;
+
+//map a parameter
+~juce_effects.map(1, Ndef(\mixControl).bus);
+~juce_effects.map(2, Ndef(\rbControl).bus);
+
+//LFOs
+Ndef(\mixControl, {LFTri.kr(0.05,-1).range(0.4,1.0)});
+Ndef(\rbControl, {LFNoise0.kr(1.0).range(0.0,1.0)});
+Ndef(\rf, {LFTri.kr(0.1).range(80,5000)});
+Ndef(\noise, {LFNoise1.kr(0.2).range(0.1,0.5)});
 
 // OSC receiver with total_length support
 OSCdef(\shapeReceiver, { |msg|
@@ -70,6 +94,20 @@ OSCdef(\shapeReceiver, { |msg|
         \dur, dur,
         \pan, pan,
         \waveType, waveType,
-        \total_length, total_length  // Passed to Env.perc for duration scaling
+        \total_length, total_length,  // Passed to Env.perc for duration scaling
+		\out, ~effectsBus
     ]);
+
+	/*Pdef(\seq,
+    	Pbind(
+        \instrument, \shapeSound,
+        \out, ~effectsBus,
+        /*\scale, Scale.minor,*/
+        //\ffreq, Ndef(\lfo).asMap,
+        //\rq, Ndef(\noise).asMap,
+	    )
+    );*/
 }, '/shape');
+
+s.scope(bus: ~effectsBus);  // Should show signal activity if routed correctly
+

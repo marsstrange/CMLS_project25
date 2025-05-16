@@ -11,7 +11,6 @@ from PyQt5.QtGui import (QPainter, QPen, QPixmap, QTabletEvent,
                          QColor, QImage)
 from PyQt5.QtCore import Qt, QPoint, pyqtSignal
 
-a = "try"
 class Shape:
     def __init__(self, shape_category, contour, color, pressure):
         self.shape_category = shape_category
