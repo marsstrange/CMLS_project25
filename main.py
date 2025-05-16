@@ -9,7 +9,7 @@ from PyQt5.QtWidgets import (QApplication, QWidget, QTabWidget, QVBoxLayout,
                              QLabel, QColorDialog, QMessageBox, QMainWindow)
 from PyQt5.QtGui import (QPainter, QPen, QPixmap, QTabletEvent,
                          QColor, QImage)
-from PyQt5.QtCore import Qt, QPoint, pyqtSignal
+from PyQt5.QtCore import Qt, QPoint, pyqtSignal, QSize
 
 class Shape:
     def __init__(self, shape_category, contour, color, pressure):
@@ -57,6 +57,8 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Drawing App with Sound Output")
+        self.setMinimumSize(400, 300)
+        self.setWindowFlags(self.windowFlags() | Qt.WindowMaximizeButtonHint)
 
         # Create tab widget
         self.tab_widget = QTabWidget()
@@ -85,12 +87,15 @@ class MainWindow(QMainWindow):
         self.drawing_tab.shape_detected.connect(self.update_results)
 
     def resizeEvent(self, event):
-        new_size = self.drawing_tab.size()
-        self.results_canvas = QPixmap(new_size)
-        self.results_canvas.fill(Qt.white)
-        self.results_label.setPixmap(self.results_canvas)
-        if hasattr(self.drawing_tab, 'perfect_shapes'):
-            self.update_results(None)
+        # Only constrain size if window is not maximized
+        if not self.isMaximized():
+            current_size = self.size()
+            new_size = QSize(
+                min(max(400, current_size.width()), 1920),
+                min(max(300, current_size.height()), 1080)
+            )
+            if current_size != new_size:
+                self.resize(new_size)
         super().resizeEvent(event)
 
     def update_results(self, shape_info):
@@ -114,6 +119,23 @@ class MainWindow(QMainWindow):
         self.results_label.setPixmap(self.results_canvas)
 
 
+class Stroke:
+    def __init__(self, points, pressures, color):
+        self.points = points
+        self.pressures = pressures
+        self.color = color
+
+    def draw(self, painter):
+        # Draw each line segment with its exact pressure
+        for i in range(len(self.points) - 1):
+            # Use the pressure from the start point of each line segment
+            pressure = self.pressures[i]
+            pen = QPen(self.color, pressure * 10)
+            pen.setCapStyle(Qt.RoundCap)
+            painter.setPen(pen)
+            painter.drawLine(self.points[i], self.points[i + 1])
+
+
 class TabletWidget(QWidget):
     shape_detected = pyqtSignal(object)
 
@@ -121,7 +143,8 @@ class TabletWidget(QWidget):
         super().__init__(parent)
         self.setWindowTitle("Tablet Drawing with Sound Output")
         self.setGeometry(100, 100, 1000, 700)
-
+        self.setMinimumSize(400, 300)
+        self.setMaximumSize(1920, 1080)
         # Drawing setup
         self.canvas = QPixmap(self.size())
         self.canvas.fill(Qt.white)
@@ -129,30 +152,35 @@ class TabletWidget(QWidget):
         self.pen_color = QColor(0, 0, 0)
         self.using_mouse = False
         self.last_pressure = 0.5
-        self.holding_button = False  # Initialize the holding state
-        self.held_shapes = []  # Initialize the list for held shapes
+        self.holding_button = False
+        self.held_shapes = []
 
         # Preview canvas
         self.preview_canvas = QPixmap(self.canvas.size())
         self.preview_canvas.fill(Qt.transparent)
 
-        # Undo/redo stacks
-        self.undo_stack = []
-        self.redo_stack = []
-
-        # Stroke tracking
-        self.current_stroke = []
+        # Store strokes as objects
         self.strokes = []
         self.perfect_shapes = []
         self.show_perfect_shapes = False
 
+        # Save initial canvas state
+        self.undo_stack = []
+        self.strokes = []
+        self.perfect_shapes = []
+        self.show_perfect_shapes = False
+
+        # Save initial canvas state
+        self.undo_stack.append(self.canvas.copy())
+
         # OSC setup
         self.osc_client = udp_client.SimpleUDPClient("127.0.0.1", 57120)  # Default SC port
         self.osc_address = "/shape"
+        self.stop_address = "/stopAll"  # Add stop address
 
         # UI elements
         self.info_label = QLabel(self)
-        self.info_label.setStyleSheet("background-color: white; padding: 4px;")
+        self.info_label.setStyleSheet("background-color: white; padding: 20px;")
         self.info_label.move(10, self.height() - 30)
         self.info_label.resize(self.width() - 20, 20)
 
@@ -207,17 +235,16 @@ class TabletWidget(QWidget):
 
     def save_undo(self):
         self.undo_stack.append(self.canvas.copy())
-        self.redo_stack.clear()
 
     def tabletEvent(self, event: QTabletEvent):
         self.using_mouse = False
         pos = event.pos()
         pressure = max(0.0, min(1.0, event.pressure()))
 
-        # Store pressure with position for averaging later
         if not hasattr(self, 'stroke_pressures'):
             self.stroke_pressures = []
         self.stroke_pressures.append(pressure)
+        print(f"Pressure: {pressure:.3f}")  # Print all pressure points
 
         rgb = (self.pen_color.red(), self.pen_color.green(), self.pen_color.blue())
         self.update_info(f"🖊️ Tablet - Pos: ({pos.x()}, {pos.y()}), Pressure: {pressure:.3f}, RGB{rgb}")
@@ -225,31 +252,36 @@ class TabletWidget(QWidget):
         if event.type() == QTabletEvent.TabletPress:
             self.last_pos = pos
             self.current_stroke = [pos]
-            self.stroke_pressures = [pressure]  # Reset pressures for new stroke
+            self.stroke_pressures = [pressure]
         elif event.type() == QTabletEvent.TabletMove and self.last_pos is not None:
-            # Just draw the line without shape detection
-            self.draw_line(self.last_pos, pos, pressure)
+            # Draw directly on canvas
+            painter = QPainter(self.canvas)
+            pen = QPen(self.pen_color, pressure * 10)
+            pen.setCapStyle(Qt.RoundCap)
+            painter.setPen(pen)
+            painter.drawLine(self.last_pos, pos)
+            painter.end()
+            
             self.last_pos = pos
             self.current_stroke.append(pos)
+            self.update()
         elif event.type() == QTabletEvent.TabletRelease:
             if self.current_stroke:
-                self.strokes.append(self.current_stroke)
-                # Only do shape detection on release
+                # Store the exact same data we used for drawing
+                stroke = Stroke(self.current_stroke.copy(), self.stroke_pressures.copy(), self.pen_color)
+                self.strokes.append(stroke)
+                
                 shapes = self.detect_shapes(self.pixmap_to_cvimg(self.canvas))
                 if shapes:
                     shape = shapes[0]
-                    # Calculate average pressure for the stroke
-                    avg_pressure = sum(self.stroke_pressures) / len(
-                        self.stroke_pressures) if self.stroke_pressures else 0.5
-                    shape.pressure = avg_pressure
-                    print(f"Average stroke pressure: {avg_pressure:.3f}")
+                    shape.pressure = sum(self.stroke_pressures) / len(self.stroke_pressures)
                     self.perfect_shapes.append(shape)
                     self.shape_detected.emit(shape)
                     self.send_shape_to_sc(shape)
+                
                 self.current_stroke = []
                 self.stroke_pressures = []
             self.last_pos = None
-            self.preview_canvas.fill(Qt.transparent)
             self.update()
 
         event.accept()
@@ -260,6 +292,8 @@ class TabletWidget(QWidget):
             self.last_pos = event.pos()
             self.current_stroke = [self.last_pos]
             self.last_pressure = 0.5  # Fixed pressure for mouse
+            # Save canvas state before starting new stroke
+            self.undo_stack.append(self.canvas.copy())
 
     def mouseMoveEvent(self, event):
         if self.using_mouse and self.last_pos is not None:
@@ -285,13 +319,15 @@ class TabletWidget(QWidget):
         if event.button() == Qt.LeftButton:
             self.last_pos = None
             if self.current_stroke:
-                self.strokes.append(self.current_stroke)
+                # For mouse, use fixed pressure of 0.5 for all points
+                fixed_pressures = [0.5] * len(self.current_stroke)
+                self.strokes.append((self.current_stroke, fixed_pressures, self.pen_color))
                 shapes = self.detect_shapes(self.pixmap_to_cvimg(self.canvas))
                 if shapes:
                     shape = shapes[0]
                     self.perfect_shapes.append(shape)
                     self.shape_detected.emit(shape)
-                    self.send_shape_to_sc(shape)  # Send to SuperCollider
+                    self.send_shape_to_sc(shape)
                 self.current_stroke = []
             self.preview_canvas.fill(Qt.transparent)
             self.update()
@@ -314,13 +350,14 @@ class TabletWidget(QWidget):
     def paintEvent(self, event):
         painter = QPainter(self)
         painter.drawPixmap(0, 0, self.canvas)
-        painter.drawPixmap(0, 0, self.preview_canvas)
+        painter.end()
 
     def resizeEvent(self, event):
-        new_canvas = QPixmap(self.size())
+        new_canvas = QPixmap(event.size())
         new_canvas.fill(Qt.white)
         painter = QPainter(new_canvas)
         painter.drawPixmap(0, 0, self.canvas)
+        painter.end()
         self.canvas = new_canvas
 
         self.preview_canvas = QPixmap(self.canvas.size())
@@ -332,25 +369,52 @@ class TabletWidget(QWidget):
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_C:
             self.color_dialog.show()
-        elif event.key() == Qt.Key_S:
-            self.detect_and_draw_shapes()
         elif event.key() == Qt.Key_Z:
             if self.strokes:
+                # Remove the last stroke and shape
                 self.strokes.pop()
                 if self.perfect_shapes:
                     self.perfect_shapes.pop()
-                self.redraw_all_strokes()
-        elif event.key() == Qt.Key_Y:
-            if self.redo_stack:
-                self.undo_stack.append(self.canvas.copy())
-                self.canvas = self.redo_stack.pop()
+                
+                # Clear and redraw everything
+                self.canvas.fill(Qt.white)
+                painter = QPainter(self.canvas)
+                for stroke in self.strokes:
+                    if isinstance(stroke, Stroke):
+                        # Redraw exactly as we drew during tablet input
+                        for i in range(len(stroke.points) - 1):
+                            pressure = stroke.pressures[i]
+                            pen = QPen(stroke.color, pressure * 10)
+                            pen.setCapStyle(Qt.RoundCap)
+                            painter.setPen(pen)
+                            painter.drawLine(stroke.points[i], stroke.points[i + 1])
+                    else:
+                        # Handle old tuple format the same way
+                        points, pressures, color = stroke
+                        for i in range(len(points) - 1):
+                            pressure = pressures[i]
+                            pen = QPen(color, pressure * 10)
+                            pen.setCapStyle(Qt.RoundCap)
+                            painter.setPen(pen)
+                            painter.drawLine(points[i], points[i + 1])
+                painter.end()
                 self.update()
         elif event.key() == Qt.Key_H:
             self.show_help()
         elif event.key() == Qt.Key_P:
             self.show_perfect_shapes = not self.show_perfect_shapes
-            self.redraw_all_strokes()
+            self.update()
+        elif event.key() == Qt.Key_Escape:
+            self.stop_all_sounds()
         event.accept()
+
+    def stop_all_sounds(self):
+        """Send OSC message to stop all sounds"""
+        try:
+            self.osc_client.send_message(self.stop_address, [])
+            self.update_info("🔇 All sounds stopped")
+        except Exception as e:
+            print(f"Error sending stop command: {str(e)}")
 
     def show_help(self):
         QMessageBox.information(
@@ -358,11 +422,10 @@ class TabletWidget(QWidget):
             "Help & Shortcuts",
             "Keyboard Shortcuts:\n\n"
             "🖍️  C - Open Color Picker\n"
-            "📐 S - Detect & Label Shapes\n"
             "🔊 Shapes are automatically sent to SuperCollider\n"
-            "↩️  Z - Undo\n"
-            "↪️  Y - Redo\n"
+            "↩️  Z - Delete Last Shape\n"
             "❓ H - Show Help Dialog\n"
+            "🔇 ESC - Stop All Sounds\n"
         )
 
     def pixmap_to_cvimg(self, pixmap):
@@ -422,42 +485,6 @@ class TabletWidget(QWidget):
                 x, y = shape.contour[0][0]
                 cv2.putText(img, shape.shape_category, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
         return img
-
-    def redraw_all_strokes(self):
-        self.canvas.fill(Qt.white)
-        painter = QPainter(self.canvas)
-
-        if self.show_perfect_shapes:
-            for shape in self.perfect_shapes:
-                painter.setPen(QPen(shape.color, 2))
-                points = [QPoint(p[0][0], p[0][1]) for p in shape.contour]
-                if len(points) > 1:
-                    for i in range(len(points) - 1):
-                        painter.drawLine(points[i], points[i + 1])
-                    if shape.shape_category != "Line":
-                        painter.drawLine(points[-1], points[0])
-        else:
-            for stroke in self.strokes:
-                pen = QPen(self.pen_color, 5)
-                pen.setCapStyle(Qt.RoundCap)
-                painter.setPen(pen)
-
-                for i in range(len(stroke) - 1):
-                    painter.drawLine(stroke[i], stroke[i + 1])
-
-        self.update()
-
-    def detect_and_draw_shapes(self):
-        if not self.current_stroke:
-            return
-
-        cv_img = self.pixmap_to_cvimg(self.canvas)
-        shapes = self.detect_shapes(cv_img)
-
-        if shapes:
-            self.perfect_shapes.append(shapes[0])
-            self.show_perfect_shapes = True
-            self.redraw_all_strokes()
 
 
 if __name__ == '__main__':

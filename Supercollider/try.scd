@@ -1,4 +1,3 @@
-// Boot the server
 s.boot;
 
 //VSTPlugin.search;
@@ -9,22 +8,17 @@ SynthDef(\juce_effects, { |in, out|
     ReplaceOut.ar(out, VSTPlugin.ar(sound, 2, id: \juce_effects));
 }).add;
 
-// SynthDef with all waveform options
-SynthDef(\shapeSound, { |freq=440, amp=0.1, dur=0.5, pan=0, waveType=0, total_length=1, out=0|
-    var env = Env.perc(0.01, dur * total_length.clip(0.1, 2)).kr(2); // Scale duration by total_length
-    var sig;
+// SynthDef with infinite sustain
+SynthDef(\shapeSound, { |freq=440, amp=0.1, pan=0, waveType=0, gate=1, out=0|
+	var env = Env.asr(0.01, 1, 0.3).kr(gate, doneAction: 2);
+	var sig;
 
-    // Waveform selector:
-    // 0 = Sine (circle/default)
-    // 1 = Square (rectangle)
-    // 2 = Triangle (triangle)
-    // 3 = Sawtooth (line)
-    sig = Select.ar(waveType, [
-        SinOsc.ar(freq),            // Sine
-        LFPulse.ar(freq),           // Square
-        LFTri.ar(freq),             // Triangle
-        Saw.ar(freq)                // Sawtooth
-    ]);
+	sig = Select.ar(waveType, [
+		SinOsc.ar(freq),    // 0 - Sine
+		LFPulse.ar(freq),   // 1 - Square
+		LFTri.ar(freq),     // 2 - Triangle
+		Saw.ar(freq)        // 3 - Sawtooth
+	]);
 
     sig = sig * env * amp;
     sig = Pan2.ar(sig, pan);
@@ -47,67 +41,65 @@ Ndef(\rbControl, {LFNoise0.kr(1.0).range(0.0,1.0)});
 Ndef(\rf, {LFTri.kr(0.1).range(80,5000)});
 Ndef(\noise, {LFNoise1.kr(0.2).range(0.1,0.5)});
 
-// OSC receiver with total_length support
+// Track last 3 active synths
+~lastSynths = [];
+
+// Main OSC receiver for shapes
 OSCdef(\shapeReceiver, { |msg|
-    var category, x, y, width, height, r, g, b, pressure, total_length;
-    var freq, amp, dur, pan, waveType;
+	var category, x, y, width, height, r, g, b, pressure, total_length;
+	var freq, amp, pan, waveType, synth;
 
-    // Unpack the message (now includes total_length)
-    category = msg[1].asString.toLower;
-    x = msg[2].asFloat;
-    y = msg[3].asFloat;
-    width = msg[4].asFloat;
-    height = msg[5].asFloat;
-    r = msg[6].asFloat;
-    g = msg[7].asFloat;
-    b = msg[8].asFloat;
-    pressure = msg[9].asFloat;
-    total_length = msg[10].asFloat; // Added parameter
+	category = msg[1].asString.toLower;
+	x = msg[2].asFloat;
+	y = msg[3].asFloat;
+	width = msg[4].asFloat;
+	height = msg[5].asFloat;
+	r = msg[6].asFloat;
+	g = msg[7].asFloat;
+	b = msg[8].asFloat;
+	pressure = msg[9].asFloat;
+	total_length = msg[10].asFloat;
 
-    // Debug prints
-    postln("----------------------");
-    postf("Shape: %\n", category);
-    postf("Position: (%, %)\n", x, y);
-    postf("Size: % x %\n", width, height);
-    postf("Color: (%, %, %)\n", r, g, b);
-    postf("Pressure: %\n", pressure);
-    postf("Total Length: %\n", total_length);
+	postln("----------------------");
+	postf("Shape: %\n", category);
+	postf("Position: (%, %)\n", x, y);
+	postf("Size: % x %\n", width, height);
+	postf("Color: (%, %, %)\n", r, g, b);
+	postf("Pressure: %\n", pressure);
+	postf("Total Length: %\n", total_length);
 
-    // Sound parameter mapping
-    freq = y.clip(0, 1).linexp(0, 1, 100, 2000);
-    amp = pressure.clip(0, 1) * 0.2;
-    dur = total_length/100;
-    pan = x.clip(0, 1).linlin(0, 1, -1, 1);
+	// Higher y = higher freq (corrected mapping)
+	freq = y.clip(0, 1).linexp(0, 1, 100, 2000);
+	amp = pressure.clip(0, 1) * 0.2;
+	pan = x.clip(0, 1).linlin(0, 1, -1, 1);
 
-    // Shape → Waveform mapping
-    waveType = case
-        { category.contains("triangle") } { 2 }  // Triangle → LFTri
-        { category.contains("rect") || category.contains("square") } { 1 }  // Rectangle → LFPulse
-        { category.contains("line") } { 3 }      // Line → Saw
-        { 0 };                                   // Default: circle → SinOsc
+	// Waveform selection
+	if (category.contains("triangle")) {
+		waveType = 2;
+	} {
+		if (category.contains("rect") or: { category.contains("square") }) {
+			waveType = 1;
+		} {
+			if (category.contains("line")) {
+				waveType = 3;
+			} {
+				waveType = 0; // default sine
+			}
+		}
+	};
 
-    postf("Sound params - Freq: %, Amp: %, Dur: %, Pan: %, Wave: %\n", freq, amp, dur, pan, waveType);
+	postf("Sound params - Freq: %, Amp: %, Pan: %, Wave: %\n", freq, amp, pan, waveType);
+
+		// Keep only last 3 synths
+	if (~lastSynths.size >= 3) {
+		~lastSynths.removeAt(0).free;
+	};
 
     Synth(\shapeSound, [
         \freq, freq,
         \amp, amp,
-        \dur, dur,
         \pan, pan,
         \waveType, waveType,
-        \total_length, total_length,  // Passed to Env.perc for duration scaling
-		\out, ~effectsBus
+        \out, ~effectsBus
     ]);
-
-	/*Pdef(\seq,
-    	Pbind(
-        \instrument, \shapeSound,
-        \out, ~effectsBus,
-        /*\scale, Scale.minor,*/
-        //\ffreq, Ndef(\lfo).asMap,
-        //\rq, Ndef(\noise).asMap,
-	    )
-    );*/
 }, '/shape');
-
-s.scope(bus: ~effectsBus);  // Should show signal activity if routed correctly
-
