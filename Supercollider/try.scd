@@ -1,29 +1,58 @@
+// Define global color thresholds
+~greenThresh = 0.5;
+~redThresh = 0.5;
+~blueThresh = 0.5;
+
 s.boot;
 
-// SynthDef with infinite sustain
-SynthDef(\shapeSound, { |freq=440, amp=0.1, pan=0, waveType=0, gate=1|
-	var env = Env.asr(0.01, 1, 0.3).kr(gate, doneAction: 2);
-	var sig;
+SynthDef(\shapeSound, { |freq=440, amp=0.1, pan=0, waveType=0, sustain=1,
+    doFM=0, doAM=0, greenVal=0, blueVal=0|
 
-	sig = Select.ar(waveType, [
-		SinOsc.ar(freq),    // 0 - Sine
-		LFPulse.ar(freq),   // 1 - Square
-		LFTri.ar(freq),     // 2 - Triangle
-		Saw.ar(freq)        // 3 - Sawtooth
-	]);
+    var envSoft, envSharp, env, sig, mod, ampMod;
+    var attackTime, releaseTime, sustainTime;
+    var greenFactor, modFreq, modDepth, amFreq;
 
-	sig = sig * env * amp;
-	sig = Pan2.ar(sig, pan);
-	Out.ar(0, sig);
+    // Green -> Envelope softness
+    greenFactor = greenVal.clip(~greenThresh, 1).linlin(~greenThresh, 1, 0.2, 0.5);
+    attackTime = sustain * greenFactor;
+    releaseTime = sustain * greenFactor;
+    sustainTime = (sustain - attackTime - releaseTime).max(0.01);
+
+    envSoft = Env.linen(attackTime, sustainTime, releaseTime, curve: 1).ar(doneAction: 2);
+    envSharp = Env.perc(0.01, sustain, 1, curve: -4).ar(doneAction: 2);
+
+    env = Select.kr((greenVal > ~greenThresh).asInteger, [envSharp, envSoft]);
+
+    // FM Modulation (Red)
+    modFreq = Select.kr((waveType == 3).asInteger, [freq * 3, freq * 0.05]);
+    modDepth = Select.kr((waveType == 3).asInteger, [freq * 3, freq * 0.005]);
+    mod = SinOsc.ar(modFreq, 0, modDepth) * doFM;
+
+    // Oscillator
+    sig = Select.ar(waveType, [
+        SinOsc.ar(freq + mod),
+        LFPulse.ar(freq + mod),
+        LFTri.ar(freq + mod),
+        Saw.ar(freq + mod)
+    ]);
+
+    // AM Modulation (Blue)
+    amFreq = blueVal.clip(~blueThresh, 1).linlin(~blueThresh, 1, 1, 6);
+    ampMod = (SinOsc.kr(amFreq).range(0.3, 1) * doAM) + ((1 - doAM) * 1);
+
+    // Final output
+    sig = sig * env * amp * ampMod;
+    sig = Pan2.ar(sig, pan);
+    Out.ar(0, sig);
 }).add;
 
-// Track last 3 active synths
-~lastSynths = [];
 
-// Main OSC receiver for shapes
+
+
 OSCdef(\shapeReceiver, { |msg|
 	var category, x, y, width, height, r, g, b, pressure, total_length;
-	var freq, amp, pan, waveType, synth;
+	var freq, amp, pan, waveType, duration;
+	var doFM, doAM, amFreq;
 
 	category = msg[1].asString.toLower;
 	x = msg[2].asFloat;
@@ -44,12 +73,18 @@ OSCdef(\shapeReceiver, { |msg|
 	postf("Pressure: %\n", pressure);
 	postf("Total Length: %\n", total_length);
 
-	// Higher y = higher freq (corrected mapping)
-	freq = y.clip(0, 1).linexp(0, 1, 100, 2000);
+	// Mappings
+	freq = y.clip(0, 1).linexp(0, 1, 1760, 100);
 	amp = pressure.clip(0, 1) * 0.2;
 	pan = x.clip(0, 1).linlin(0, 1, -1, 1);
+	duration = total_length * 0.02;
 
-	// Waveform selection
+	doFM = (r > ~redThresh).asInteger;
+	doAM = (b > ~blueThresh).asInteger;
+
+	amFreq = b.clip(~blueThresh, 1).linlin(~blueThresh, 1, 3, 20);
+
+	// Wave type detection
 	if (category.contains("triangle")) {
 		waveType = 2;
 	} {
@@ -59,31 +94,30 @@ OSCdef(\shapeReceiver, { |msg|
 			if (category.contains("line")) {
 				waveType = 3;
 			} {
-				waveType = 0; // default sine
+				waveType = 0;
 			}
 		}
 	};
 
-	postf("Sound params - Freq: %, Amp: %, Pan: %, Wave: %\n", freq, amp, pan, waveType);
+	postf("Sound params - Freq: %, Amp: %, Pan: %, Wave: %, Duration: %, FM: %, AM: %, GreenVal: %, AM Freq: %\n",
+		freq, amp, pan, waveType, duration, doFM, doAM, g, amFreq);
 
-	// Keep only last 3 synths
-	if (~lastSynths.size >= 3) {
-		~lastSynths.removeAt(0).free;
-	};
-
-	synth = Synth(\shapeSound, [
+	Synth(\shapeSound, [
 		\freq, freq,
 		\amp, amp,
 		\pan, pan,
-		\waveType, waveType
+		\waveType, waveType,
+		\sustain, duration,
+		\doFM, doFM,
+		\doAM, doAM,
+		\greenVal, g,
+		\blueVal, b
 	]);
-
-	~lastSynths = ~lastSynths.add(synth);
 }, '/shape');
 
-// OSC command to stop all active synths
+
+
 OSCdef(\stopAll, {
-	"Stopping all synths".postln;
-	~lastSynths.do(_.free);
-	~lastSynths = [];
+	"Stopping all synths (via Group)".postln;
+	s.defaultGroup.freeAll;
 }, '/stopAll');

@@ -119,23 +119,6 @@ class MainWindow(QMainWindow):
         self.results_label.setPixmap(self.results_canvas)
 
 
-class Stroke:
-    def __init__(self, points, pressures, color):
-        self.points = points
-        self.pressures = pressures
-        self.color = color
-
-    def draw(self, painter):
-        # Draw each line segment with its exact pressure
-        for i in range(len(self.points) - 1):
-            # Use the pressure from the start point of each line segment
-            pressure = self.pressures[i]
-            pen = QPen(self.color, pressure * 10)
-            pen.setCapStyle(Qt.RoundCap)
-            painter.setPen(pen)
-            painter.drawLine(self.points[i], self.points[i + 1])
-
-
 class TabletWidget(QWidget):
     shape_detected = pyqtSignal(object)
 
@@ -152,8 +135,6 @@ class TabletWidget(QWidget):
         self.pen_color = QColor(0, 0, 0)
         self.using_mouse = False
         self.last_pressure = 0.5
-        self.holding_button = False
-        self.held_shapes = []
 
         # Preview canvas
         self.preview_canvas = QPixmap(self.canvas.size())
@@ -162,16 +143,6 @@ class TabletWidget(QWidget):
         # Store strokes as objects
         self.strokes = []
         self.perfect_shapes = []
-        self.show_perfect_shapes = False
-
-        # Save initial canvas state
-        self.undo_stack = []
-        self.strokes = []
-        self.perfect_shapes = []
-        self.show_perfect_shapes = False
-
-        # Save initial canvas state
-        self.undo_stack.append(self.canvas.copy())
 
         # OSC setup
         self.osc_client = udp_client.SimpleUDPClient("127.0.0.1", 57120)  # Default SC port
@@ -233,9 +204,6 @@ class TabletWidget(QWidget):
         except Exception as e:
             print(f"Error sending OSC message: {str(e)}")
 
-    def save_undo(self):
-        self.undo_stack.append(self.canvas.copy())
-
     def tabletEvent(self, event: QTabletEvent):
         self.using_mouse = False
         pos = event.pos()
@@ -254,13 +222,8 @@ class TabletWidget(QWidget):
             self.current_stroke = [pos]
             self.stroke_pressures = [pressure]
         elif event.type() == QTabletEvent.TabletMove and self.last_pos is not None:
-            # Draw directly on canvas
-            painter = QPainter(self.canvas)
-            pen = QPen(self.pen_color, pressure * 10)
-            pen.setCapStyle(Qt.RoundCap)
-            painter.setPen(pen)
-            painter.drawLine(self.last_pos, pos)
-            painter.end()
+            # Use draw_line instead of direct QPainter
+            self.draw_line(self.last_pos, pos, pressure)
             
             self.last_pos = pos
             self.current_stroke.append(pos)
@@ -268,8 +231,7 @@ class TabletWidget(QWidget):
         elif event.type() == QTabletEvent.TabletRelease:
             if self.current_stroke:
                 # Store the exact same data we used for drawing
-                stroke = Stroke(self.current_stroke.copy(), self.stroke_pressures.copy(), self.pen_color)
-                self.strokes.append(stroke)
+                self.strokes.append((self.current_stroke.copy(), self.stroke_pressures.copy(), self.pen_color))
                 
                 shapes = self.detect_shapes(self.pixmap_to_cvimg(self.canvas))
                 if shapes:
@@ -292,8 +254,6 @@ class TabletWidget(QWidget):
             self.last_pos = event.pos()
             self.current_stroke = [self.last_pos]
             self.last_pressure = 0.5  # Fixed pressure for mouse
-            # Save canvas state before starting new stroke
-            self.undo_stack.append(self.canvas.copy())
 
     def mouseMoveEvent(self, event):
         if self.using_mouse and self.last_pos is not None:
@@ -334,7 +294,6 @@ class TabletWidget(QWidget):
         event.accept()
 
     def draw_line(self, start: QPoint, end: QPoint, pressure: float):
-        self.save_undo()
         painter = QPainter(self.canvas)
         pen = QPen(self.pen_color, pressure * 10)
         pen.setCapStyle(Qt.RoundCap)
@@ -369,42 +328,12 @@ class TabletWidget(QWidget):
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_C:
             self.color_dialog.show()
-        elif event.key() == Qt.Key_Z:
-            if self.strokes:
-                # Remove the last stroke and shape
-                self.strokes.pop()
-                if self.perfect_shapes:
-                    self.perfect_shapes.pop()
-                
-                # Clear and redraw everything
-                self.canvas.fill(Qt.white)
-                painter = QPainter(self.canvas)
-                for stroke in self.strokes:
-                    if isinstance(stroke, Stroke):
-                        # Redraw exactly as we drew during tablet input
-                        for i in range(len(stroke.points) - 1):
-                            pressure = stroke.pressures[i]
-                            pen = QPen(stroke.color, pressure * 10)
-                            pen.setCapStyle(Qt.RoundCap)
-                            painter.setPen(pen)
-                            painter.drawLine(stroke.points[i], stroke.points[i + 1])
-                    else:
-                        # Handle old tuple format the same way
-                        points, pressures, color = stroke
-                        for i in range(len(points) - 1):
-                            pressure = pressures[i]
-                            pen = QPen(color, pressure * 10)
-                            pen.setCapStyle(Qt.RoundCap)
-                            painter.setPen(pen)
-                            painter.drawLine(points[i], points[i + 1])
-                painter.end()
-                self.update()
         elif event.key() == Qt.Key_H:
             self.show_help()
-        elif event.key() == Qt.Key_P:
-            self.show_perfect_shapes = not self.show_perfect_shapes
-            self.update()
         elif event.key() == Qt.Key_Escape:
+            self.stop_all_sounds()
+        elif event.key() == Qt.Key_Delete:
+            self.clear_canvas()
             self.stop_all_sounds()
         event.accept()
 
@@ -417,16 +346,28 @@ class TabletWidget(QWidget):
             print(f"Error sending stop command: {str(e)}")
 
     def show_help(self):
-        QMessageBox.information(
-            self,
-            "Help & Shortcuts",
-            "Keyboard Shortcuts:\n\n"
-            "🖍️  C - Open Color Picker\n"
-            "🔊 Shapes are automatically sent to SuperCollider\n"
-            "↩️  Z - Delete Last Shape\n"
-            "❓ H - Show Help Dialog\n"
-            "🔇 ESC - Stop All Sounds\n"
-        )
+        help_text = """
+        <h2>Drawing Controls</h2>
+        <p><b>Mouse/Tablet:</b> Draw on the canvas</p>
+        <p><b>Pressure:</b> Controls line thickness and sound amplitude</p>
+        <p><b>Position:</b> Controls sound frequency and panning</p>
+        
+        <h2>Keyboard Shortcuts</h2>
+        <p><b>C:</b> Open color picker</p>
+        <p><b>H:</b> Show this help</p>
+        <p><b>Delete:</b> Clear canvas and stop all sounds</p>
+        <p><b>Esc:</b> Stop all sounds</p>
+        
+        <h2>Shape Detection</h2>
+        <p>Draw shapes to trigger different sounds:</p>
+        <ul>
+            <li>Lines → Sawtooth wave</li>
+            <li>Triangles → Triangle wave</li>
+            <li>Rectangles → Square wave</li>
+            <li>Other shapes → Sine wave</li>
+        </ul>
+        """
+        QMessageBox.information(self, "Help", help_text)
 
     def pixmap_to_cvimg(self, pixmap):
         image = pixmap.toImage().convertToFormat(QImage.Format_ARGB32)
@@ -485,6 +426,15 @@ class TabletWidget(QWidget):
                 x, y = shape.contour[0][0]
                 cv2.putText(img, shape.shape_category, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 1)
         return img
+
+    def clear_canvas(self):
+        """Clear the canvas and reset all stroke data"""
+        self.canvas.fill(Qt.white)
+        self.strokes = []
+        self.perfect_shapes = []
+        self.current_stroke = []
+        self.stroke_pressures = []
+        self.update()
 
 
 if __name__ == '__main__':
