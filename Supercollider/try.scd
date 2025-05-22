@@ -5,13 +5,29 @@
 
 s.boot;
 
+<<<<<<< HEAD
 SynthDef(\shapeSound, { |freq=440, amp=0.1, pan=0, waveType=0, sustain=1,
     doFM=0, doAM=0, greenVal=0, blueVal=0|
+=======
+//VSTPlugin.search;
+
+// Does the effects routing
+SynthDef(\juce_effects, { |in, out|
+    var sound = In.ar(in, 2);
+    ReplaceOut.ar(out, VSTPlugin.ar(sound, 2, id: \juce_effects));
+}).add;
+
+// SynthDef with infinite sustain
+SynthDef(\shapeSound, { |freq=440, amp=0.1, pan=0, waveType=0, gate=1, out=0|
+	var env = Env.asr(0.01, 1, 0.3).kr(gate, doneAction: 2);
+	var sig;
+>>>>>>> 620315967a475b8979dcf992a45a82dceda7b8ca
 
     var envSoft, envSharp, env, sig, mod, ampMod;
     var attackTime, releaseTime, sustainTime;
     var greenFactor, modFreq, modDepth, amFreq;
 
+<<<<<<< HEAD
     // Green -> Envelope softness
     greenFactor = greenVal.clip(~greenThresh, 1).linlin(~greenThresh, 1, 0.2, 0.5);
     attackTime = sustain * greenFactor;
@@ -46,6 +62,31 @@ SynthDef(\shapeSound, { |freq=440, amp=0.1, pan=0, waveType=0, sustain=1,
     Out.ar(0, sig);
 }).add;
 
+=======
+    sig = sig * env * amp;
+    sig = Pan2.ar(sig, pan);
+    Out.ar(out, sig);
+}).add;
+
+~effectsBus = Bus.audio(s, 2);
+
+~juce_effects = VSTPluginController(Synth(\juce_effects, [\in, ~effectsBus, \out, 0]), id: \juce_effects);
+~juce_effects.open("C:/Program Files/Common Files/VST3/Valhalla/ValhallaShimmer.vst3", editor: true, verbose: true);
+~juce_effects.editor;
+
+//map a parameter
+~juce_effects.map(1, Ndef(\mixControl).bus);
+~juce_effects.map(2, Ndef(\rbControl).bus);
+
+//LFOs
+Ndef(\mixControl, {LFTri.kr(0.05,-1).range(0.4,1.0)});
+Ndef(\rbControl, {LFNoise0.kr(1.0).range(0.0,1.0)});
+Ndef(\rf, {LFTri.kr(0.1).range(80,5000)});
+Ndef(\noise, {LFNoise1.kr(0.2).range(0.1,0.5)});
+
+// Track last 3 active synths
+~lastSynths = [];
+>>>>>>> 620315967a475b8979dcf992a45a82dceda7b8ca
 
 
 
@@ -102,6 +143,7 @@ OSCdef(\shapeReceiver, { |msg|
 	postf("Sound params - Freq: %, Amp: %, Pan: %, Wave: %, Duration: %, FM: %, AM: %, GreenVal: %, AM Freq: %\n",
 		freq, amp, pan, waveType, duration, doFM, doAM, g, amFreq);
 
+<<<<<<< HEAD
 	Synth(\shapeSound, [
 		\freq, freq,
 		\amp, amp,
@@ -121,3 +163,18 @@ OSCdef(\stopAll, {
 	"Stopping all synths (via Group)".postln;
 	s.defaultGroup.freeAll;
 }, '/stopAll');
+=======
+		// Keep only last 3 synths
+	if (~lastSynths.size >= 3) {
+		~lastSynths.removeAt(0).free;
+	};
+
+    Synth(\shapeSound, [
+        \freq, freq,
+        \amp, amp,
+        \pan, pan,
+        \waveType, waveType,
+        \out, ~effectsBus
+    ]);
+}, '/shape');
+>>>>>>> 620315967a475b8979dcf992a45a82dceda7b8ca
