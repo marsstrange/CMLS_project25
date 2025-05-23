@@ -1,11 +1,12 @@
+s.boot;
+//VSTPlugin.search;
+
 // Define global color thresholds
 ~greenThresh = 0.5;
 ~redThresh = 0.5;
 ~blueThresh = 0.5;
 
-s.boot;
-
-//VSTPlugin.search;
+~effectsBus = Bus.audio(s, 2);
 
 // Does the effects routing
 SynthDef(\juce_effects, { |in, out|
@@ -14,7 +15,7 @@ SynthDef(\juce_effects, { |in, out|
 }).add;
 
 SynthDef(\shapeSound, { |freq=440, amp=0.1, pan=0, waveType=0, sustain=1,
-    doFM=0, doAM=0, greenVal=0, blueVal=0|
+    doFM=0, doAM=0, greenVal=0, blueVal=0, out=0|
 
     var envSoft, envSharp, env, sig, mod, ampMod;
     var attackTime, releaseTime, sustainTime;
@@ -51,18 +52,16 @@ SynthDef(\shapeSound, { |freq=440, amp=0.1, pan=0, waveType=0, sustain=1,
     // Final output
     sig = sig * env * amp * ampMod;
     sig = Pan2.ar(sig, pan);
-    Out.ar(0, sig);
+    Out.ar(out, sig);
 }).add;
 
-~effectsBus = Bus.audio(s, 2);
-
 ~juce_effects = VSTPluginController(Synth(\juce_effects, [\in, ~effectsBus, \out, 0]), id: \juce_effects);
-~juce_effects.open("C:/Program Files/Common Files/VST3/Valhalla/ValhallaShimmer.vst3", editor: true, verbose: true);
+~juce_effects.open("C:/Program Files/VSTPlugins/ShimmerEffectPlugin.vst3", editor: true, verbose: true);
 ~juce_effects.editor;
 
 //map a parameter
 ~juce_effects.map(1, Ndef(\mixControl).bus);
-~juce_effects.map(2, Ndef(\rbControl).bus);
+~juce_effects.map(0, Ndef(\noise).bus);
 
 //LFOs
 Ndef(\mixControl, {LFTri.kr(0.05,-1).range(0.4,1.0)});
@@ -70,7 +69,7 @@ Ndef(\rbControl, {LFNoise0.kr(1.0).range(0.0,1.0)});
 Ndef(\rf, {LFTri.kr(0.1).range(80,5000)});
 Ndef(\noise, {LFNoise1.kr(0.2).range(0.1,0.5)});
 
-
+// Main OSC receiver for shapes
 OSCdef(\shapeReceiver, { |msg|
 	var category, x, y, width, height, r, g, b, pressure, total_length;
 	var freq, amp, pan, waveType, duration;
@@ -137,7 +136,6 @@ OSCdef(\shapeReceiver, { |msg|
 		\out, ~effectsBus
 	]);
 }, '/shape');
-
 
 
 OSCdef(\stopAll, {
