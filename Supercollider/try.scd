@@ -1,3 +1,4 @@
+//official one
 s.boot;
 //VSTPlugin.search;
 
@@ -71,7 +72,7 @@ Ndef(\noise, {LFNoise1.kr(0.2).range(0.1,0.5)});
 
 // Main OSC receiver for shapes
 OSCdef(\shapeReceiver, { |msg|
-	var category, x, y, width, height, r, g, b, pressure, total_length;
+	var category, x, y, width, height, r, g, b, pressure, total_length, num_points, contour_points;
 	var freq, amp, pan, waveType, duration;
 	var doFM, doAM, amFreq;
 
@@ -135,6 +136,21 @@ OSCdef(\shapeReceiver, { |msg|
 		\blueVal, b,
 		\out, ~effectsBus
 	]);
+
+	//NEW: extract contour points
+	num_points = msg[11].asInteger;
+    contour_points = msg.copyRange(12, 12 + (num_points * 2) - 1).asFloat;
+	//NEW: send to processing
+	~processingAddr.sendMsg("/shapeContour",
+        category,
+        x, y, width, height,
+        r, g, b,
+        pressure,
+        total_length,
+        num_points,
+        *contour_points
+    );
+
 }, '/shape');
 
 
