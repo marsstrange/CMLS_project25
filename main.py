@@ -11,6 +11,7 @@ from PyQt5.QtGui import (QPainter, QPen, QPixmap, QTabletEvent,
                          QColor, QImage)
 from PyQt5.QtCore import Qt, QPoint, pyqtSignal, QSize
 
+
 class Shape:
     def __init__(self, shape_category, contour, color, pressure):
         self.shape_category = shape_category
@@ -188,6 +189,18 @@ class TabletWidget(QWidget):
             x_pos = shape.position.x() / self.width()
             y_pos = shape.position.y() / self.height()
 
+            # NEW for storing contour points
+            canvas_width = self.canvas.width()
+            canvas_height = self.canvas.height()
+            contour_points = shape.contour.squeeze()  # Shape (n, 2)
+            contour_normalized = []
+            for (x, y) in contour_points:
+                nx = x / canvas_width
+                ny = y / canvas_height
+                contour_normalized.extend([nx, ny])
+            num_points = len(contour_normalized) // 2
+            contour_floats = [float(coord) for coord in contour_normalized]
+
             self.osc_client.send_message("/shape", [
                 str(shape.shape_category),  # category
                 float(x_pos),  # x position
@@ -199,6 +212,8 @@ class TabletWidget(QWidget):
                 float(shape.color.blue() / 255.0),  # b
                 float(shape.pressure),  # pressure
                 float(total_length)  # total stroke length
+                num_points,  # NEW
+                *contour_floats  # NEW
             ])
             print(f"Sent shape: {shape.shape_category}, pos: ({x_pos:.2f}, {y_pos:.2f}), length: {total_length:.2f}")
         except Exception as e:
@@ -224,7 +239,7 @@ class TabletWidget(QWidget):
         elif event.type() == QTabletEvent.TabletMove and self.last_pos is not None:
             # Use draw_line instead of direct QPainter
             self.draw_line(self.last_pos, pos, pressure)
-            
+
             self.last_pos = pos
             self.current_stroke.append(pos)
             self.update()
@@ -232,7 +247,7 @@ class TabletWidget(QWidget):
             if self.current_stroke:
                 # Store the exact same data we used for drawing
                 self.strokes.append((self.current_stroke.copy(), self.stroke_pressures.copy(), self.pen_color))
-                
+
                 shapes = self.detect_shapes(self.pixmap_to_cvimg(self.canvas))
                 if shapes:
                     shape = shapes[0]
@@ -240,7 +255,7 @@ class TabletWidget(QWidget):
                     self.perfect_shapes.append(shape)
                     self.shape_detected.emit(shape)
                     self.send_shape_to_sc(shape)
-                
+
                 self.current_stroke = []
                 self.stroke_pressures = []
             self.last_pos = None
@@ -351,13 +366,13 @@ class TabletWidget(QWidget):
         <p><b>Mouse/Tablet:</b> Draw on the canvas</p>
         <p><b>Pressure:</b> Controls line thickness and sound amplitude</p>
         <p><b>Position:</b> Controls sound frequency and panning</p>
-        
+
         <h2>Keyboard Shortcuts</h2>
         <p><b>C:</b> Open color picker</p>
         <p><b>H:</b> Show this help</p>
         <p><b>Delete:</b> Clear canvas and stop all sounds</p>
         <p><b>Esc:</b> Stop all sounds</p>
-        
+
         <h2>Shape Detection</h2>
         <p>Draw shapes to trigger different sounds:</p>
         <ul>
