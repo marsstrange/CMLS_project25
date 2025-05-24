@@ -163,11 +163,13 @@ class TabletWidget(QWidget):
 
         self.setFocusPolicy(Qt.StrongFocus)
 
+        '''
         try:
             self.osc_client._sock.connect(('127.0.0.1', 57120))
             print("Successfully connected to SuperCollider")
         except Exception as e:
             print(f"OSC Connection Error: {str(e)}")
+        '''
 
     def set_pen_color(self, color):
         self.pen_color = color
@@ -211,7 +213,7 @@ class TabletWidget(QWidget):
                 float(shape.color.green() / 255.0),  # g
                 float(shape.color.blue() / 255.0),  # b
                 float(shape.pressure),  # pressure
-                float(total_length)  # total stroke length
+                float(total_length),  # total stroke length
                 num_points,  # NEW
                 *contour_floats  # NEW
             ])
@@ -347,7 +349,7 @@ class TabletWidget(QWidget):
             self.show_help()
         elif event.key() == Qt.Key_Escape:
             self.stop_all_sounds()
-        elif event.key() == Qt.Key_Delete:
+        elif event.key() == Qt.Key_Z:
             self.clear_canvas()
             self.stop_all_sounds()
         event.accept()
@@ -450,6 +452,14 @@ class TabletWidget(QWidget):
         self.current_stroke = []
         self.stroke_pressures = []
         self.update()
+
+        # NEW to send Key_z command to SC
+        try:
+            self.osc_client.send_message("/clearVisuals", [1])  # 1 means "clear"
+        except Exception as e:
+            print(f"Error sending clear command: {str(e)}")
+
+        self.stop_all_sounds()
 
 
 if __name__ == '__main__':
