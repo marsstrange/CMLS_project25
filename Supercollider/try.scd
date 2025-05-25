@@ -9,6 +9,43 @@ s.boot;
 
 ~effectsBus = Bus.audio(s, 2);
 
+~vstdirectory = "";
+
+(
+// 1. Find the project directory (adjust "CMLS_Project" if needed)
+var projectName = "CMLS_Project";
+var projectDir;
+
+// Try to find the project path dynamically
+if (thisProcess.nowExecutingPath.notNil) {
+    var scriptDir = PathName(thisProcess.nowExecutingPath).pathOnly;
+    projectDir = scriptDir;
+
+    // If not directly in the project folder, search upwards
+    while { projectDir != "/" and: { projectDir.basename != projectName } } {
+        projectDir = PathName(projectDir).parentPath;
+    };
+
+    if (projectDir.basename == projectName) {
+        var vstDir = projectDir +/+ "vst"; // Assumes VSTs are in /vst/
+		~vstdirectory = vstDir +/+ "ShimmerEffectPlugin.vst3";
+        if (File.exists(vstDir)) {
+            // 2. Search for plugins in the custom directory
+            // --- FIX: Pass the server (s) first, then the directory ---
+            VSTPlugin.search(s, [vstDir]);
+            ("Scanning VSTs in: " + vstDir).postln;
+        } {
+            ("VST directory not found in project: " + vstDir).warn;
+        };
+    } {
+        ("Project directory '" ++ projectName ++ "' not found.").warn;
+    };
+} {
+    "Could not determine script location.".warn;
+};
+)
+
+
 // Does the effects routing
 SynthDef(\juce_effects, { |in, out|
     var sound = In.ar(in, 2);
@@ -57,7 +94,7 @@ SynthDef(\shapeSound, { |freq=440, amp=0.1, pan=0, waveType=0, sustain=1,
 }).add;
 
 ~juce_effects = VSTPluginController(Synth(\juce_effects, [\in, ~effectsBus, \out, 0]), id: \juce_effects);
-~juce_effects.open("C:/Program Files/VSTPlugins/ShimmerEffectPlugin.vst3", editor: true, verbose: true);
+~juce_effects.open(~vstdirectory, editor: true, verbose: true);
 ~juce_effects.editor;
 
 //map a parameter
