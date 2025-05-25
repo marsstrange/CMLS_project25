@@ -126,8 +126,7 @@ class TabletWidget(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Tablet Drawing with Sound Output")
-        self.setGeometry(100, 100, 1000, 700)
-        self.setMinimumSize(400, 300)
+        self.setMinimumSize(800, 600)
         self.setMaximumSize(1920, 1080)
         # Drawing setup
         self.canvas = QPixmap(self.size())
@@ -162,6 +161,19 @@ class TabletWidget(QWidget):
         self.color_dialog.currentColorChanged.connect(self.set_pen_color)
 
         self.setFocusPolicy(Qt.StrongFocus)
+
+        # Create help label
+        self.help_label = QLabel("Press 'H' for help", self)
+        self.help_label.setStyleSheet("""
+            QLabel {
+                color: #666666;
+                background-color: rgba(255, 255, 255, 180);
+                padding: 5px;
+                border-radius: 5px;
+            }
+        """)
+        self.help_label.setAlignment(Qt.AlignRight | Qt.AlignTop)
+        self.help_label.setGeometry(self.width() - 150, 10, 140, 30)
 
         '''
         try:
@@ -342,6 +354,9 @@ class TabletWidget(QWidget):
         self.info_label.move(10, self.height() - 30)
         self.info_label.resize(self.width() - 20, 20)
 
+        # Update help label position when window is resized
+        self.help_label.setGeometry(self.width() - 150, 10, 140, 30)
+
     def keyPressEvent(self, event):
         if event.key() == Qt.Key_C:
             self.color_dialog.show()
@@ -368,13 +383,13 @@ class TabletWidget(QWidget):
         <p><b>Mouse/Tablet:</b> Draw on the canvas</p>
         <p><b>Pressure:</b> Controls line thickness and sound amplitude</p>
         <p><b>Position:</b> Controls sound frequency and panning</p>
-
+        
         <h2>Keyboard Shortcuts</h2>
         <p><b>C:</b> Open color picker</p>
         <p><b>H:</b> Show this help</p>
-        <p><b>Delete:</b> Clear canvas and stop all sounds</p>
+        <p><b>Z:</b> Clear canvas and stop all sounds</p>
         <p><b>Esc:</b> Stop all sounds</p>
-
+        
         <h2>Shape Detection</h2>
         <p>Draw shapes to trigger different sounds:</p>
         <ul>
