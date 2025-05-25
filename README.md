@@ -12,3 +12,4 @@ TO DO:
 7. To improve sound generation if needed
 8. To map vst3 to some other parameters (discussion needed)
 9. h is help button in text add
+10. delete z button change
