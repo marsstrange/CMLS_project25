@@ -87,7 +87,6 @@ The Processing component provides:
 - Visual feedback for:
   - Pan position 
   - Frequency range 
-- Modulation indicators showing active FM/AM effects
 - Automatic cleanup of expired shapes
 
 Troubleshooting
