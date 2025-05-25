@@ -36,6 +36,9 @@ Installation
 
 2. Install SuperCollider VSTPlugin extention from [supercollider.github.io](https://git.iem.at/pd/vstplugin/-/releases)
 
+3. Install the oscP5 library in Processing:
+   - Go to Sketch -> Import Library -> Add Library -> search "oscP5" and install it
+
 Running the Application
 ----------------------
 1. Pull the project from github into your python IDE (preferably pyCharm):
@@ -49,6 +52,9 @@ Running the Application
 3. Then run the Python application:
    - Run the main.py file
    - Draw with a tablet (or your mouse) to hear the resulting sounds
+
+4. Finally, run the Processing visualization:
+   - Run the processingFinal.pde file
 
 Controls
 --------
@@ -68,6 +74,22 @@ The application detects different shapes and triggers corresponding sounds:
 - Rectangles → Square wave
 - Other shapes → Sine wave
 
+Visualisation Features
+-------------------------------
+The Processing component provides:
+- Real-time display of drawn shapes
+- Dual oscilloscope monitoring:
+  - Individual shape waveforms (sine, square, triangle, sawtooth)
+  - Combined output waveform
+- Frequency analysis displays:
+  - Per-shape frequency response
+  - Overall frequency response
+- Visual feedback for:
+  - Pan position 
+  - Frequency range 
+- Modulation indicators showing active FM/AM effects
+- Automatic cleanup of expired shapes
+
 Troubleshooting
 --------------
 If you encounter connection errors:
@@ -80,6 +102,7 @@ Project Structure
 - main.py: Python application with GUI and drawing functionality
 - main.scd: SuperCollider code for sound synthesis
 - ShimmerEffectPlugin.vst3: VST plugin for audio effects
+- processingFinal.pde: processing code for visualisation
 
 Dependencies
 -----------
@@ -92,3 +115,6 @@ Python:
 SuperCollider:
 - VSTPlugin: For audio effects
 - OSC: For communication with Python
+
+Processing:
+- oscP5: For communication with SuperCollider
