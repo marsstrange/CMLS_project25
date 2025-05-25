@@ -1,6 +1,6 @@
 import os
 
-os.environ['QT_LOGGING_RULES'] = '*.debug=false'  # Disable Qt debug messages
+os.environ['QT_LOGGING_RULES'] = '*.debug=false'
 import sys
 import numpy as np
 import cv2
@@ -28,7 +28,7 @@ class Shape:
         else:
             self.position = QPoint(0, 0)
 
-        # Calculate size (bounding rect)
+        # Calculate size
         x, y, w, h = cv2.boundingRect(contour)
         self.size = (w, h)
 
@@ -39,7 +39,7 @@ class Shape:
                 f"pressure {self.pressure:.2f}")
 
     def to_osc_dict(self):
-        """Convert shape properties to OSC-friendly dictionary"""
+
         return {
             'category': self.shape_category,
             'color_r': self.color.red() / 255.0,
@@ -47,7 +47,7 @@ class Shape:
             'color_b': self.color.blue() / 255.0,
             'x': self.position.x() / self.size[0] if self.size[0] > 0 else 0,
             'y': 1.0 - (self.position.y() / self.size[1]) if self.size[1] > 0 else 0,
-            # Flip Y for more intuitive pitch mapping
+
             'width': self.size[0],
             'height': self.size[1],
             'pressure': self.pressure
@@ -61,22 +61,18 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(400, 300)
         self.setWindowFlags(self.windowFlags() | Qt.WindowMaximizeButtonHint)
 
-        # Create tab widget
         self.tab_widget = QTabWidget()
         self.setCentralWidget(self.tab_widget)
 
-        # Create drawing tab
         self.drawing_tab = TabletWidget()
         self.tab_widget.addTab(self.drawing_tab, "Drawing")
 
-        # Create results tab
         self.results_tab = QWidget()
         self.results_layout = QVBoxLayout()
         self.results_layout.setContentsMargins(0, 0, 0, 0)
         self.results_tab.setLayout(self.results_layout)
         self.tab_widget.addTab(self.results_tab, "Results")
 
-        # Create canvas for results
         self.results_canvas = QPixmap(self.drawing_tab.size())
         self.results_canvas.fill(Qt.white)
         self.results_label = QLabel()
@@ -84,11 +80,9 @@ class MainWindow(QMainWindow):
         self.results_label.setScaledContents(True)
         self.results_layout.addWidget(self.results_label)
 
-        # Connect signals
         self.drawing_tab.shape_detected.connect(self.update_results)
 
     def resizeEvent(self, event):
-        # Only constrain size if window is not maximized
         if not self.isMaximized():
             current_size = self.size()
             new_size = QSize(
@@ -128,7 +122,7 @@ class TabletWidget(QWidget):
         self.setWindowTitle("Tablet Drawing with Sound Output")
         self.setMinimumSize(800, 600)
         self.setMaximumSize(1920, 1080)
-        # Drawing setup
+
         self.canvas = QPixmap(self.size())
         self.canvas.fill(Qt.white)
         self.last_pos = None
@@ -136,20 +130,16 @@ class TabletWidget(QWidget):
         self.using_mouse = False
         self.last_pressure = 0.5
 
-        # Preview canvas
         self.preview_canvas = QPixmap(self.canvas.size())
         self.preview_canvas.fill(Qt.transparent)
 
-        # Store strokes as objects
         self.strokes = []
         self.perfect_shapes = []
 
-        # OSC setup
         self.osc_client = udp_client.SimpleUDPClient("127.0.0.1", 57120)  # Default SC port
         self.osc_address = "/shape"
         self.stop_address = "/stopAll"  # Add stop address
 
-        # UI elements
         self.info_label = QLabel(self)
         self.info_label.setStyleSheet("background-color: white; padding: 20px;")
         self.info_label.move(10, self.height() - 30)
@@ -162,7 +152,6 @@ class TabletWidget(QWidget):
 
         self.setFocusPolicy(Qt.StrongFocus)
 
-        # Create help label
         self.help_label = QLabel("Press 'H' for help", self)
         self.help_label.setStyleSheet("""
             QLabel {
@@ -192,21 +181,18 @@ class TabletWidget(QWidget):
 
     def send_shape_to_sc(self, shape):
         try:
-            # Calculate total stroke length
             total_length = 0
             for i in range(len(self.current_stroke) - 1):
                 p1 = self.current_stroke[i]
                 p2 = self.current_stroke[i + 1]
                 total_length += ((p2.x() - p1.x()) ** 2 + (p2.y() - p1.y()) ** 2) ** 0.5
 
-            # Normalize position to 0-1 range
             x_pos = shape.position.x() / self.width()
             y_pos = shape.position.y() / self.height()
 
-            # NEW for storing contour points
             canvas_width = self.canvas.width()
             canvas_height = self.canvas.height()
-            contour_points = shape.contour.squeeze()  # Shape (n, 2)
+            contour_points = shape.contour.squeeze()
             contour_normalized = []
             for (x, y) in contour_points:
                 nx = x / canvas_width
@@ -216,18 +202,18 @@ class TabletWidget(QWidget):
             contour_floats = [float(coord) for coord in contour_normalized]
 
             self.osc_client.send_message("/shape", [
-                str(shape.shape_category),  # category
-                float(x_pos),  # x position
-                float(y_pos),  # y position
-                float(shape.size[0]),  # width
-                float(shape.size[1]),  # height
-                float(shape.color.red() / 255.0),  # r
-                float(shape.color.green() / 255.0),  # g
-                float(shape.color.blue() / 255.0),  # b
-                float(shape.pressure),  # pressure
-                float(total_length),  # total stroke length
-                num_points,  # NEW
-                *contour_floats  # NEW
+                str(shape.shape_category),
+                float(x_pos),
+                float(y_pos),
+                float(shape.size[0]),
+                float(shape.size[1]),
+                float(shape.color.red() / 255.0),
+                float(shape.color.green() / 255.0),
+                float(shape.color.blue() / 255.0),
+                float(shape.pressure),
+                float(total_length),
+                num_points,
+                *contour_floats
             ])
             print(f"Sent shape: {shape.shape_category}, pos: ({x_pos:.2f}, {y_pos:.2f}), length: {total_length:.2f}")
         except Exception as e:
@@ -241,7 +227,7 @@ class TabletWidget(QWidget):
         if not hasattr(self, 'stroke_pressures'):
             self.stroke_pressures = []
         self.stroke_pressures.append(pressure)
-        print(f"Pressure: {pressure:.3f}")  # Print all pressure points
+        print(f"Pressure: {pressure:.3f}")
 
         rgb = (self.pen_color.red(), self.pen_color.green(), self.pen_color.blue())
         self.update_info(f"🖊️ Tablet - Pos: ({pos.x()}, {pos.y()}), Pressure: {pressure:.3f}, RGB{rgb}")
@@ -251,7 +237,6 @@ class TabletWidget(QWidget):
             self.current_stroke = [pos]
             self.stroke_pressures = [pressure]
         elif event.type() == QTabletEvent.TabletMove and self.last_pos is not None:
-            # Use draw_line instead of direct QPainter
             self.draw_line(self.last_pos, pos, pressure)
 
             self.last_pos = pos
@@ -259,7 +244,6 @@ class TabletWidget(QWidget):
             self.update()
         elif event.type() == QTabletEvent.TabletRelease:
             if self.current_stroke:
-                # Store the exact same data we used for drawing
                 self.strokes.append((self.current_stroke.copy(), self.stroke_pressures.copy(), self.pen_color))
 
                 shapes = self.detect_shapes(self.pixmap_to_cvimg(self.canvas))
@@ -282,11 +266,11 @@ class TabletWidget(QWidget):
             self.using_mouse = True
             self.last_pos = event.pos()
             self.current_stroke = [self.last_pos]
-            self.last_pressure = 0.5  # Fixed pressure for mouse
+            self.last_pressure = 0.5
 
     def mouseMoveEvent(self, event):
         if self.using_mouse and self.last_pos is not None:
-            pressure = 0.5  # Fixed pressure for mouse
+            pressure = 0.5
             pos = event.pos()
             rgb = (self.pen_color.red(), self.pen_color.green(), self.pen_color.blue())
             self.update_info(f"🖱️ Mouse - Pos: ({pos.x()}, {pos.y()}), Pressure: {pressure:.3f}, RGB{rgb}")
@@ -295,7 +279,6 @@ class TabletWidget(QWidget):
             self.last_pos = pos
             self.last_pressure = pressure
 
-            # Real-time shape hint
             self.preview_canvas.fill(Qt.transparent)
             hint_img = self.pixmap_to_cvimg(self.canvas)
             shapes = self.detect_shapes(hint_img)
@@ -308,7 +291,6 @@ class TabletWidget(QWidget):
         if event.button() == Qt.LeftButton:
             self.last_pos = None
             if self.current_stroke:
-                # For mouse, use fixed pressure of 0.5 for all points
                 fixed_pressures = [0.5] * len(self.current_stroke)
                 self.strokes.append((self.current_stroke, fixed_pressures, self.pen_color))
                 shapes = self.detect_shapes(self.pixmap_to_cvimg(self.canvas))
@@ -354,7 +336,6 @@ class TabletWidget(QWidget):
         self.info_label.move(10, self.height() - 30)
         self.info_label.resize(self.width() - 20, 20)
 
-        # Update help label position when window is resized
         self.help_label.setGeometry(self.width() - 150, 10, 140, 30)
 
     def keyPressEvent(self, event):
@@ -438,12 +419,10 @@ class TabletWidget(QWidget):
         elif len(approx) > 6:
             shape_category = "Circle"
 
-        # Calculate normalized position
         x, y, w, h = cv2.boundingRect(points)
-        center_x = int(x + w / 2)  # Convert to integer
-        center_y = int(y + h / 2)  # Convert to integer
+        center_x = int(x + w / 2)
+        center_y = int(y + h / 2)
 
-        # Create shape with proper position and pressure
         shape = Shape(shape_category, approx, self.pen_color, self.last_pressure)
         shape.position = QPoint(center_x, center_y)
         shape.size = (w, h)
@@ -468,7 +447,6 @@ class TabletWidget(QWidget):
         self.stroke_pressures = []
         self.update()
 
-        # NEW to send Key_z command to SC
         try:
             self.osc_client.send_message("/clearVisuals", [1])  # 1 means "clear"
         except Exception as e:

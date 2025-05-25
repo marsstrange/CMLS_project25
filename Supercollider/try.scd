@@ -2,7 +2,6 @@
 s.boot;
 //VSTPlugin.search;
 
-// Define global color thresholds
 ~greenThresh = 0.5;
 ~redThresh = 0.5;
 ~blueThresh = 0.5;
@@ -12,26 +11,22 @@ s.boot;
 ~vstdirectory = "";
 
 (
-// 1. Find the project directory (adjust "CMLS_Project" if needed)
 var projectName = "Supercollider";
 var projectDir;
 
-// Try to find the project path dynamically
 if (thisProcess.nowExecutingPath.notNil) {
     var scriptDir = PathName(thisProcess.nowExecutingPath).pathOnly;
     projectDir = scriptDir;
 
-    // If not directly in the project folder, search upwards
     while { projectDir != "/" and: { projectDir.basename != projectName } } {
         projectDir = PathName(projectDir).parentPath;
     };
 
     if (projectDir.basename == projectName) {
-        var vstDir = projectDir +/+ "vst"; // Assumes VSTs are in /vst/
+        var vstDir = projectDir +/+ "vst";
 		~vstdirectory = vstDir +/+ "ShimmerEffectPlugin.vst3";
         if (File.exists(vstDir)) {
-            // 2. Search for plugins in the custom directory
-            // --- FIX: Pass the server (s) first, then the directory ---
+
             VSTPlugin.search(s, [vstDir]);
             ("Scanning VSTs in: " + vstDir).postln;
         } {
@@ -46,7 +41,7 @@ if (thisProcess.nowExecutingPath.notNil) {
 )
 
 
-// Does the effects routing
+// effects routing
 SynthDef(\juce_effects, { |in, out|
     var sound = In.ar(in, 2);
     ReplaceOut.ar(out, VSTPlugin.ar(sound, 2, id: \juce_effects));
@@ -59,7 +54,6 @@ SynthDef(\shapeSound, { |freq=440, amp=0.1, pan=0, waveType=0, sustain=1,
     var attackTime, releaseTime, sustainTime;
     var greenFactor, modFreq, modDepth, amFreq;
 
-    // Green -> Envelope softness
     greenFactor = greenVal.clip(~greenThresh, 1).linlin(~greenThresh, 1, 0.2, 0.5);
     attackTime = sustain * greenFactor;
     releaseTime = sustain * greenFactor;
@@ -117,7 +111,6 @@ OSCdef(\shapeReceiver, { |msg|
 	var category, x, y, width, height, r, g, b, pressure, total_length, num_points, contour_points;
 	var freq, amp, pan, waveType, duration;
 	var doFM, doAM, amFreq;
-	//var now = thisThread.seconds;
 
 
 	category = msg[1].asString.toLower;
@@ -181,10 +174,8 @@ OSCdef(\shapeReceiver, { |msg|
 		\out, ~effectsBus
 	]);
 
-	//NEW: extract contour points
 	num_points = msg[11].asInteger;
     contour_points = msg.copyRange(12, 12 + (num_points * 2) - 1).asFloat;
-	//NEW: send to processing
 	~processingAddr.sendMsg("/shapeContour",
         category,
         x, y, width, height,
@@ -200,12 +191,10 @@ OSCdef(\shapeReceiver, { |msg|
 
 OSCdef(\stopAll, {
     "Stopping all shape synths".postln;
-    // Only stop the shape synths, not everything
-    s.defaultGroup.set(\gate, 0); // gentler release
+    s.defaultGroup.set(\gate, 0);
 }, '/stopAll');
 
 
-//Key_Z command from python
 OSCdef(\clearVisuals, { |msg|
     if(msg[1] == 1) {
         "Clearing visuals".postln;
