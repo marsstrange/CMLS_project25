@@ -21,6 +21,8 @@ Prerequisites
 ------------
 - Python 3.x
 - SuperCollider 3.x
+    - VSTPlugin — SuperCollider extension: https://git.iem.at/pd/vstplugin/-/releases
+    - Tutorial on how to install the extension: https://www.youtube.com/watch?v=TOKgLjix1aU
 - Required Python packages:
   - PyQt5
   - python-osc
