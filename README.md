@@ -19,7 +19,7 @@ TO DO:
 Drawing Sound Project
 ====================
 
-A real-time audio-visual application that converts drawings into sound using Python and SuperCollider.
+A real-time audio-visual application that converts drawings into sound using Python, SuperCollider and JUCE. 
 
 Prerequisites
 ------------
@@ -36,14 +36,14 @@ Installation
 1. Install Python dependencies:
    pip install PyQt5 python-osc numpy opencv-python
 
-2. Install SuperCollider from supercollider.github.io
+2. Install SuperCollider VSTPlugin extention from [supercollider.github.io](https://git.iem.at/pd/vstplugin/-/releases)
 
 Running the Application
 ----------------------
 1. Start SuperCollider first:
    - Open SuperCollider
-   - Load the main.scd file
-   - Run the code (Ctrl+Enter or Cmd+Enter)
+   - Load the try.scd file
+   - Run the code block by block (Select and press Ctrl+Enter or Cmd+Enter) 
 
 2. Then run the Python application:
    python main.py
