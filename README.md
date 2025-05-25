@@ -17,17 +17,23 @@ Drawing Sound Project
 
 A real-time audio-visual application that converts drawings into sound using Python, SuperCollider and JUCE. 
 
+The system is an interactive educational tool for children that fosters imagination and introduces the basic principles of sound. It provides a foundational understanding of waveforms, panning, pitch, and other core audio concepts. 
+
+Users draw on a digital canvas using different colors and varying pressure, and hear audio output shaped by these and other parameters. 
+
+
 Prerequisites
 ------------
 - Python 3.x
 - SuperCollider 3.x
-    - VSTPlugin — SuperCollider extension: https://git.iem.at/pd/vstplugin/-/releases
-    - Tutorial on how to install the extension: https://www.youtube.com/watch?v=TOKgLjix1aU
+    - VSTPlugin — SuperCollider extension
 - Required Python packages:
   - PyQt5
   - python-osc
   - numpy
   - opencv-python
+- Required Processing libraries:
+  - OSCP5
 
 Installation
 -----------
@@ -41,13 +47,13 @@ Installation
 
 Running the Application
 ----------------------
-1. Pull the project from github into your python IDE (preferably pyCharm):
-   - Locate the project file, the usual directory is C:\Users\USERNAME\PycharmProjects\CMLS_project25
+1. Clone the project from GitHub:
+   - Locate the project file, the usual directory is C:\Users\<USERNAME>\PycharmProjects\CMLS_project25
 
 2. Start SuperCollider first:
    - Open the SuperCollider file and run try.scd
    - Make sure to boot/reboot server each time
-   - Run the supercollider code block by block (Select and press Ctrl+Enter or Cmd+Enter)
+   - Run the SuperCollider code block by block (select and press Ctrl+Enter or Cmd+Enter)
 
 3. Then run the Python application:
    - Run the main.py file
@@ -94,7 +100,7 @@ Troubleshooting
 If you encounter connection errors:
 1. Make sure SuperCollider is running before starting Python
 2. Check that port 57120 is available
-3. If needed, restart both applications
+3. If needed, restart applications
 
 Project Structure
 ----------------
@@ -102,18 +108,3 @@ Project Structure
 - main.scd: SuperCollider code for sound synthesis
 - ShimmerEffectPlugin.vst3: VST plugin for audio effects
 - processingFinal.pde: processing code for visualisation
-
-Dependencies
------------
-Python:
-- PyQt5: GUI framework
-- python-osc: OSC communication
-- numpy: Numerical operations
-- opencv-python: Shape detection
-
-SuperCollider:
-- VSTPlugin: For audio effects
-- OSC: For communication with Python
-
-Processing:
-- oscP5: For communication with SuperCollider
