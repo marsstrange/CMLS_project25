@@ -188,13 +188,6 @@ OSCdef(\shapeReceiver, { |msg|
 
 }, '/shape');
 
-
-OSCdef(\stopAll, {
-    "Stopping all shape synths".postln;
-    s.defaultGroup.set(\gate, 0);
-}, '/stopAll');
-
-
 OSCdef(\clearVisuals, { |msg|
     if(msg[1] == 1) {
         "Clearing visuals".postln;
