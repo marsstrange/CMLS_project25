@@ -199,8 +199,9 @@ OSCdef(\shapeReceiver, { |msg|
 
 
 OSCdef(\stopAll, {
-	"Stopping all synths (via Group)".postln;
-	s.defaultGroup.freeAll;
+    "Stopping all shape synths".postln;
+    // Only stop the shape synths, not everything
+    s.defaultGroup.set(\gate, 0); // gentler release
 }, '/stopAll');
 
 
@@ -211,4 +212,3 @@ OSCdef(\clearVisuals, { |msg|
         ~processingAddr.sendMsg("/clearVisuals");
     }
 }, '/clearVisuals');
-
