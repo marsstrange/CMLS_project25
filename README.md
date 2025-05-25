@@ -41,12 +41,12 @@ Running the Application
 
 2. Start SuperCollider first:
    - Open the SuperCollider file and run try.scd
-   - Load the try.scd file
+   - Make sure to boot/reboot server each time
    - Run the supercollider code block by block (Select and press Ctrl+Enter or Cmd+Enter)
 
 3. Then run the Python application:
    - Run the main.py file
-   - Draw with a tablet (or your mouse) to hear the resulting soundscape
+   - Draw with a tablet (or your mouse) to hear the resulting sounds
 
 Controls
 --------
