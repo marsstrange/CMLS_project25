@@ -3,16 +3,12 @@
 
 
 TO DO: 
-1. To do a report
-2. To do slides
-3. To change the position of the text on vst3 plugin
-4. To change directory for vst3 in SC
-5. To test everything together (also with a tablet)
-6. To reorganize github repo (to write a readme + reorganize the files themselves)
-7. To improve sound generation if needed
-8. To map vst3 to some other parameters (discussion needed)
-9. h is help button in text add
-10. delete z button change
+1. To do slides
+2. To change the position of the text on vst3 plugin
+3. To test everything together (also with a tablet)
+4. To reorganize github repo (to write a readme + reorganize the files themselves)
+5. h is help button in text add
+6. delete z button change
 
 
 
@@ -40,13 +36,17 @@ Installation
 
 Running the Application
 ----------------------
-1. Start SuperCollider first:
-   - Open SuperCollider
-   - Load the try.scd file
-   - Run the code block by block (Select and press Ctrl+Enter or Cmd+Enter) 
+1. Pull the project from github into your python IDE (preferably pyCharm):
+   - Locate the project file, the usual directory is C:\Users\USERNAME\PycharmProjects\CMLS_project25
 
-2. Then run the Python application:
-   python main.py
+2. Start SuperCollider first:
+   - Open the SuperCollider file and run try.scd
+   - Load the try.scd file
+   - Run the supercollider code block by block (Select and press Ctrl+Enter or Cmd+Enter)
+
+3. Then run the Python application:
+   - Run the main.py file
+   - Draw with a tablet (or your mouse) to hear the resulting soundscape
 
 Controls
 --------
