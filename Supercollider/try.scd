@@ -13,7 +13,7 @@ s.boot;
 
 (
 // 1. Find the project directory (adjust "CMLS_Project" if needed)
-var projectName = "CMLS_Project";
+var projectName = "Supercollider";
 var projectDir;
 
 // Try to find the project path dynamically
