@@ -10,4 +10,5 @@ TO DO:
 5. To test everything together (also with a tablet)
 6. To reorganize github repo (to write a readme + reorganize the files themselves)
 7. To improve sound generation if needed
-8. To map vst3 to some other parameters (discussion needed) 
+8. To map vst3 to some other parameters (discussion needed)
+9. h is help button in text add
