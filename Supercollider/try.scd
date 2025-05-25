@@ -3,18 +3,23 @@ s.boot;
 //VSTPlugin.search;
 
 // Define global color thresholds
+(
 ~greenThresh = 0.5;
 ~redThresh = 0.5;
 ~blueThresh = 0.5;
+)
 
 ~effectsBus = Bus.audio(s, 2);
 
 // Does the effects routing
+(
 SynthDef(\juce_effects, { |in, out|
     var sound = In.ar(in, 2);
     ReplaceOut.ar(out, VSTPlugin.ar(sound, 2, id: \juce_effects));
 }).add;
+)
 
+(
 SynthDef(\shapeSound, { |freq=440, amp=0.1, pan=0, waveType=0, sustain=1,
     doFM=0, doAM=0, greenVal=0, blueVal=0, out=0|
 
@@ -54,10 +59,12 @@ SynthDef(\shapeSound, { |freq=440, amp=0.1, pan=0, waveType=0, sustain=1,
     sig = sig * env * amp * ampMod;
     sig = Pan2.ar(sig, pan);
     Out.ar(out, sig);
-}).add;
 
-~juce_effects = VSTPluginController(Synth(\juce_effects, [\in, ~effectsBus, \out, 0]), id: \juce_effects);
-~juce_effects.open("C:/Program Files/VSTPlugins/ShimmerEffectPlugin.vst3", editor: true, verbose: true);
+}).add;
+)
+
+~juce_effects =VSTPluginController(Synth(\juce_effects, [\in, ~effectsBus, \out, 0]), id: \juce_effects);
+~juce_effects.open("/Library/Audio/Plug-Ins/VST/ValhallaShimmer_x64.vst", editor: true, verbose: true);
 ~juce_effects.editor;
 
 //map a parameter
@@ -65,16 +72,23 @@ SynthDef(\shapeSound, { |freq=440, amp=0.1, pan=0, waveType=0, sustain=1,
 ~juce_effects.map(0, Ndef(\noise).bus);
 
 //LFOs
+
 Ndef(\mixControl, {LFTri.kr(0.05,-1).range(0.4,1.0)});
 Ndef(\rbControl, {LFNoise0.kr(1.0).range(0.0,1.0)});
 Ndef(\rf, {LFTri.kr(0.1).range(80,5000)});
 Ndef(\noise, {LFNoise1.kr(0.2).range(0.1,0.5)});
+
+
+//OSC to processing
+~processingAddr = NetAddr("127.0.0.1", 12000);
 
 // Main OSC receiver for shapes
 OSCdef(\shapeReceiver, { |msg|
 	var category, x, y, width, height, r, g, b, pressure, total_length, num_points, contour_points;
 	var freq, amp, pan, waveType, duration;
 	var doFM, doAM, amFreq;
+	//var now = thisThread.seconds;
+
 
 	category = msg[1].asString.toLower;
 	x = msg[2].asFloat;
@@ -158,3 +172,13 @@ OSCdef(\stopAll, {
 	"Stopping all synths (via Group)".postln;
 	s.defaultGroup.freeAll;
 }, '/stopAll');
+
+
+//Key_Z command from python
+OSCdef(\clearVisuals, { |msg|
+    if(msg[1] == 1) {
+        "Clearing visuals".postln;
+        ~processingAddr.sendMsg("/clearVisuals");
+    }
+}, '/clearVisuals');
+
