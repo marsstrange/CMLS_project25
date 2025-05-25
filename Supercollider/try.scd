@@ -102,16 +102,23 @@ SynthDef(\shapeSound, { |freq=440, amp=0.1, pan=0, waveType=0, sustain=1,
 ~juce_effects.map(0, Ndef(\noise).bus);
 
 //LFOs
+
 Ndef(\mixControl, {LFTri.kr(0.05,-1).range(0.4,1.0)});
 Ndef(\rbControl, {LFNoise0.kr(1.0).range(0.0,1.0)});
 Ndef(\rf, {LFTri.kr(0.1).range(80,5000)});
 Ndef(\noise, {LFNoise1.kr(0.2).range(0.1,0.5)});
+
+
+//OSC to processing
+~processingAddr = NetAddr("127.0.0.1", 12000);
 
 // Main OSC receiver for shapes
 OSCdef(\shapeReceiver, { |msg|
 	var category, x, y, width, height, r, g, b, pressure, total_length, num_points, contour_points;
 	var freq, amp, pan, waveType, duration;
 	var doFM, doAM, amFreq;
+	//var now = thisThread.seconds;
+
 
 	category = msg[1].asString.toLower;
 	x = msg[2].asFloat;
@@ -195,3 +202,13 @@ OSCdef(\stopAll, {
 	"Stopping all synths (via Group)".postln;
 	s.defaultGroup.freeAll;
 }, '/stopAll');
+
+
+//Key_Z command from python
+OSCdef(\clearVisuals, { |msg|
+    if(msg[1] == 1) {
+        "Clearing visuals".postln;
+        ~processingAddr.sendMsg("/clearVisuals");
+    }
+}, '/clearVisuals');
+
