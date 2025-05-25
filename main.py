@@ -383,13 +383,13 @@ class TabletWidget(QWidget):
         <p><b>Mouse/Tablet:</b> Draw on the canvas</p>
         <p><b>Pressure:</b> Controls line thickness and sound amplitude</p>
         <p><b>Position:</b> Controls sound frequency and panning</p>
-        
+
         <h2>Keyboard Shortcuts</h2>
         <p><b>C:</b> Open color picker</p>
         <p><b>H:</b> Show this help</p>
         <p><b>Z:</b> Clear canvas and stop all sounds</p>
         <p><b>Esc:</b> Stop all sounds</p>
-        
+
         <h2>Shape Detection</h2>
         <p>Draw shapes to trigger different sounds:</p>
         <ul>
