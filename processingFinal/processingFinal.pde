@@ -39,6 +39,7 @@ final int freqLabelInterval = 500;
 final int xLabelOffset = 20;
 final int yLabelOffset = 10;
 
+
 void setup() {
   size(1000, 700);
   background(255);
@@ -220,8 +221,29 @@ void drawIndividualOscilloscope() {
       vertex(xp, yp);
     }
     endShape();
+    
+    // indicators for FM and AM 
+        float rValue = red(latest.col)/255.0;
+        float bValue = blue(latest.col)/255.0;
+        
+        // thresholds of SC
+        float redThreshold = 0.5f;  
+        float blueThreshold = 0.5f; 
+        boolean showFM = rValue > redThreshold;
+        boolean showAM = bValue > blueThreshold;
+        
+        textAlign(LEFT, TOP);
+        textSize(14);
+        fill(0);
+        
+        if (showFM && showAM) {
+            text("FM, AM", xPos + 5, individualScopeY + 5);  // Combined display
+        } 
+        else {
+            if (showFM) text("FM", xPos + 5, individualScopeY + 5);
+            if (showAM) text("AM", xPos + 5, individualScopeY + 5);
+        }
   }
-
   drawFrequencyResponse(xPos, individualResponseY, getLatestShape());
 }
 
@@ -344,6 +366,10 @@ void drawFrequencyResponse(float xPos, float yPos, Shape shape) {
     float h = map(fundamentalAmp, 0, fundamentalAmp, 0, responseHeight);
     rect(xPosFreq - 1, yPos + responseHeight - h, 2, h);
   }
+  
+  
+  
+  
 }
 
 void drawSummedFrequencyResponse(float xPos, float yPos) {

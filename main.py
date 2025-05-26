@@ -138,6 +138,7 @@ class TabletWidget(QWidget):
 
         self.osc_client = udp_client.SimpleUDPClient("127.0.0.1", 57120)  # Default SC port
         self.osc_address = "/shape"
+        self.stop_address = "/stopAll"  # Add stop address
 
         self.info_label = QLabel(self)
         self.info_label.setStyleSheet("background-color: white; padding: 20px;")
@@ -335,6 +336,7 @@ class TabletWidget(QWidget):
         self.info_label.move(10, self.height() - 30)
         self.info_label.resize(self.width() - 20, 20)
 
+        # Update help label position when window is resized
         self.help_label.setGeometry(self.width() - 150, 10, 140, 30)
 
     def keyPressEvent(self, event):
@@ -342,12 +344,20 @@ class TabletWidget(QWidget):
             self.color_dialog.show()
         elif event.key() == Qt.Key_H:
             self.show_help()
-
+        elif event.key() == Qt.Key_Escape:
+            self.stop_all_sounds()
         elif event.key() == Qt.Key_Z:
             self.clear_canvas()
+            self.stop_all_sounds()
         event.accept()
 
-
+    def stop_all_sounds(self):
+        """Send OSC message to stop all sounds"""
+        try:
+            self.osc_client.send_message(self.stop_address, [])
+            self.update_info("🔇 All sounds stopped")
+        except Exception as e:
+            print(f"Error sending stop command: {str(e)}")
 
     def show_help(self):
         help_text = """
@@ -359,7 +369,8 @@ class TabletWidget(QWidget):
         <h2>Keyboard Shortcuts</h2>
         <p><b>C:</b> Open color picker</p>
         <p><b>H:</b> Show this help</p>
-        <p><b>Z:</b> Clear canvas</p>
+        <p><b>Z:</b> Clear canvas and stop all sounds</p>
+        <p><b>Esc:</b> Stop all sounds</p>
 
         <h2>Shape Detection</h2>
         <p>Draw shapes to trigger different sounds:</p>
@@ -410,8 +421,8 @@ class TabletWidget(QWidget):
             shape_category = "Circle"
 
         x, y, w, h = cv2.boundingRect(points)
-        center_x = int(x + w / 2)
-        center_y = int(y + h / 2)
+        center_x = int(x + w / 2)  # Convert to integer
+        center_y = int(y + h / 2)  # Convert to integer
 
         shape = Shape(shape_category, approx, self.pen_color, self.last_pressure)
         shape.position = QPoint(center_x, center_y)
@@ -442,6 +453,8 @@ class TabletWidget(QWidget):
         except Exception as e:
             print(f"Error sending clear command: {str(e)}")
 
+        self.stop_all_sounds()
+
 
 if __name__ == '__main__':
     app = QApplication(sys.argv)
@@ -449,5 +462,5 @@ if __name__ == '__main__':
     window.show()
     sys.exit(app.exec_())
 
-    # client = udp_client.SimpleUDPClient("127.0.0.1", 57120)
-    # client.send_message("/test", [440, 0.2])  # freq, amp
+    client = udp_client.SimpleUDPClient("127.0.0.1", 57120)
+    client.send_message("/test", [440, 0.2])  # freq, amp
